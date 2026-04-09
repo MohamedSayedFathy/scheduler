@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx shadcn@latest add checkbox --yes)",
+      "Bash(wc -l c:/VSCode/scheduler/apps/web/src/components/time-slots/*.tsx c:/VSCode/scheduler/apps/web/src/lib/trpc/routers/time-slots.ts)",
+      "Bash(pnpm --filter @scheduler/web exec tsc --noEmit --project apps/web/tsconfig.json)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_comprehensive.py -v)",
+      "Bash(npx dotenv-cli:*)",
+      "Bash(npx turbo:*)",
+      "Bash(python -m pytest tests/ -x --tb=short)",
+      "Bash(node -e \"const m = require\\('/c/VSCode/scheduler/apps/web/node_modules/jspdf-autotable'\\); console.log\\('default:', typeof m.default, 'autoTable:', typeof m.autoTable\\)\")",
+      "Bash(node -e \"const p = require\\('/c/VSCode/scheduler/node_modules/.pnpm/jspdf-autotable@5.0.7_jspdf@4.2.1/node_modules/jspdf-autotable/package.json'\\); console.log\\('main:', p.main, 'module:', p.module, 'types:', p.types\\)\")",
+      "Bash(find c:/VSCode/scheduler/engine/src -name \"*.py\" -exec grep -l \"duration_slots\\\\|CONTIGUOUS_MULTI_SLOT\" {} \\\\;)"
+    ]
+  }
+}

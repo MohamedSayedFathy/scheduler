@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SKIP_ENV_VALIDATION: "1"
+  NODE_ENV: test
+
+jobs:
+  # ────────────────── Web (Next.js) ──────────────────
+  web-lint:
+    name: Web — Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm format:check
+
+  web-test:
+    name: Web — Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:coverage
+      - uses: codecov/codecov-action@v4
+        with:
+          files: apps/web/coverage/lcov.info
+          flags: web
+          fail_ci_if_error: false
+
+  web-build:
+    name: Web — Build
+    runs-on: ubuntu-latest
+    needs: [web-lint, web-test]
+    env:
+      # Stub env vars required for build (validated at runtime, not build)
+      DATABASE_URL: "postgresql://stub:stub@localhost:5432/stub"
+      CLERK_SECRET_KEY: "sk_test_stub"
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_stub"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      ENGINE_URL: "http://localhost:8000"
+      ENGINE_HMAC_SECRET: "01234567890123456789012345678901"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  # ────────────────── Engine (Python) ──────────────────
+  engine-lint:
+    name: Engine — Lint & Typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install .[dev]
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: mypy src
+
+  engine-test:
+    name: Engine — Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install .[dev]
+      - run: pytest --cov=src --cov-report=xml --cov-report=term-missing
+      - uses: codecov/codecov-action@v4
+        with:
+          files: engine/coverage.xml
+          flags: engine
+          fail_ci_if_error: false
+
+  engine-docker:
+    name: Engine — Docker Build
+    runs-on: ubuntu-latest
+    needs: [engine-lint, engine-test]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t scheduler-engine:ci engine/
+
+  # ────────────────── Security ──────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pnpm install --frozen-lockfile
+      - name: pnpm audit
+        run: pnpm audit --audit-level=high || true
+      - name: pip audit
+        run: |
+          pip install pip-audit
+          cd engine && pip install . && pip-audit || true
