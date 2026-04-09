@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import hmac
 import time
+from collections import defaultdict
 from typing import Any
 
 import httpx
@@ -13,7 +14,9 @@ from ortools.sat.python import cp_model
 from src.api.schemas import (
     Conflict,
     ConstraintType,
+    Lecturer,
     ScheduleEntry,
+    Session,
     SolveRequest,
     SolveResult,
     SolveResultStatus,
@@ -29,40 +32,223 @@ from src.solver.variables import create_variables
 logger = structlog.get_logger()
 
 
+def _partition_by_week(
+    request: SolveRequest,
+) -> list[SolveRequest]:
+    """Split a large request into independent weekly sub-problems.
+
+    Sessions are grouped by their allowed_time_slot_ids. Sessions sharing
+    the same set of allowed slots belong to the same week. Each sub-request
+    only includes the time slots relevant to that week, plus all rooms,
+    lecturers, student groups (filtered to relevant slots).
+    """
+    all_time_slot_ids = {ts.id for ts in request.time_slots}
+    ts_map = {ts.id: ts for ts in request.time_slots}
+
+    # Group sessions by their allowed time slot set (frozen set as key)
+    week_groups: defaultdict[frozenset[str], list[Session]] = defaultdict(list)
+    ungrouped: list[Session] = []
+
+    for session in request.sessions:
+        if session.allowed_time_slot_ids:
+            key = frozenset(session.allowed_time_slot_ids)
+            week_groups[key].append(session)
+        else:
+            ungrouped.append(session)
+
+    # If no partitioning possible, return original
+    if len(week_groups) <= 1 and not ungrouped:
+        return [request]
+    if not week_groups and ungrouped:
+        return [request]
+
+    sub_requests: list[SolveRequest] = []
+
+    for week_slot_ids, sessions in week_groups.items():
+        # Only include time slots for this week
+        week_slots = [ts_map[ts_id] for ts_id in week_slot_ids if ts_id in ts_map]
+
+        # Filter lecturer availability to only this week's slots
+        week_lecturers = []
+        for lec in request.lecturers:
+            week_avail = [ts_id for ts_id in lec.available_time_slot_ids if ts_id in week_slot_ids]
+            week_preferred = [ts_id for ts_id in lec.preferred_time_slot_ids if ts_id in week_slot_ids]
+            week_lecturers.append(Lecturer(
+                id=lec.id,
+                name=lec.name,
+                available_time_slot_ids=week_avail,
+                preferred_time_slot_ids=week_preferred,
+                preferred_room_ids=lec.preferred_room_ids,
+                max_consecutive_slots=lec.max_consecutive_slots,
+            ))
+
+        sub_requests.append(SolveRequest(
+            tenant_id=request.tenant_id,
+            schedule_id=request.schedule_id,
+            callback_url=request.callback_url,
+            rooms=request.rooms,
+            time_slots=week_slots,
+            sessions=sessions,
+            lecturers=week_lecturers,
+            student_groups=request.student_groups,
+            constraints=request.constraints,
+            solver_config=request.solver_config,
+        ))
+
+    # Add ungrouped sessions (no allowed_time_slot_ids) to the first sub-request
+    # or create a separate one with all time slots
+    if ungrouped:
+        sub_requests.append(SolveRequest(
+            tenant_id=request.tenant_id,
+            schedule_id=request.schedule_id,
+            callback_url=request.callback_url,
+            rooms=request.rooms,
+            time_slots=request.time_slots,
+            sessions=ungrouped,
+            lecturers=request.lecturers,
+            student_groups=request.student_groups,
+            constraints=request.constraints,
+            solver_config=request.solver_config,
+        ))
+
+    return sub_requests
+
+
 def solve(request: SolveRequest) -> SolveResult:
     """Run the CP-SAT solver on the scheduling problem.
 
-    Args:
-        request: The solve request with all problem data.
-
-    Returns:
-        SolveResult with entries if solved, conflicts if infeasible.
+    If the problem can be partitioned into independent weekly sub-problems,
+    each week is solved separately for dramatically better performance.
     """
     start_time = time.monotonic()
 
+    # Partition into weekly sub-problems
+    sub_requests = _partition_by_week(request)
+
+    if len(sub_requests) > 1:
+        logger.info(
+            "partitioned_into_weeks",
+            num_weeks=len(sub_requests),
+            sessions_per_week=[len(sr.sessions) for sr in sub_requests],
+        )
+        return _solve_partitioned(request, sub_requests, start_time)
+
+    # Single problem (no partitioning possible)
+    return _solve_single(request, start_time)
+
+
+def _solve_partitioned(
+    original_request: SolveRequest,
+    sub_requests: list[SolveRequest],
+    start_time: float,
+) -> SolveResult:
+    """Solve each weekly sub-problem independently and merge results."""
+    all_entries: list[ScheduleEntry] = []
+    all_conflicts: list[Conflict] = []
+    total_branches = 0
+    total_conflicts_count = 0
+    worst_status = SolverStatus.OPTIMAL
+
+    # Per-week timeout: divide total time budget across weeks
+    per_week_timeout = max(10, original_request.solver_config.timeout_seconds // len(sub_requests))
+
+    for i, sub_req in enumerate(sub_requests):
+        week_start = time.monotonic()
+        logger.info(
+            "solving_week",
+            week=i + 1,
+            total_weeks=len(sub_requests),
+            num_sessions=len(sub_req.sessions),
+            num_time_slots=len(sub_req.time_slots),
+            timeout=per_week_timeout,
+        )
+
+        # Override timeout for this sub-problem
+        sub_req.solver_config.timeout_seconds = per_week_timeout
+
+        result = _solve_single(sub_req, week_start)
+
+        logger.info(
+            "week_solved",
+            week=i + 1,
+            status=result.status.value,
+            num_entries=len(result.entries),
+            wall_time=round(time.monotonic() - week_start, 2),
+        )
+
+        if result.status == SolveResultStatus.SOLVED:
+            all_entries.extend(result.entries)
+            if result.stats:
+                total_branches += result.stats.num_branches or 0
+                total_conflicts_count += result.stats.num_conflicts or 0
+                if result.stats.status.value > worst_status.value:
+                    worst_status = result.stats.status
+        elif result.status == SolveResultStatus.INFEASIBLE:
+            all_conflicts.extend(result.conflicts or [])
+            all_conflicts.append(Conflict(
+                constraint_type=ConstraintType.ROOM_CAPACITY,
+                message=f"Week {i + 1} is infeasible.",
+            ))
+            # Continue solving other weeks
+            worst_status = SolverStatus.INFEASIBLE
+        else:
+            # Timeout or failure
+            if worst_status != SolverStatus.INFEASIBLE:
+                worst_status = SolverStatus.UNKNOWN
+
+    wall_time = time.monotonic() - start_time
+
+    if all_entries:
+        return SolveResult(
+            job_id="",
+            tenant_id=original_request.tenant_id,
+            schedule_id=original_request.schedule_id,
+            status=SolveResultStatus.SOLVED,
+            entries=all_entries,
+            conflicts=all_conflicts if all_conflicts else None,
+            stats=SolverStats(
+                status=worst_status,
+                wall_time_seconds=round(wall_time, 3),
+                num_branches=total_branches,
+                num_conflicts=total_conflicts_count,
+            ),
+        )
+
+    # All weeks failed
+    result_status = (
+        SolveResultStatus.INFEASIBLE
+        if worst_status == SolverStatus.INFEASIBLE
+        else SolveResultStatus.TIMEOUT
+        if worst_status == SolverStatus.UNKNOWN
+        else SolveResultStatus.FAILED
+    )
+
+    return SolveResult(
+        job_id="",
+        tenant_id=original_request.tenant_id,
+        schedule_id=original_request.schedule_id,
+        status=result_status,
+        conflicts=all_conflicts if all_conflicts else None,
+        stats=SolverStats(
+            status=worst_status,
+            wall_time_seconds=round(wall_time, 3),
+        ),
+        error_message=f"All {len(sub_requests)} weeks failed to solve.",
+    )
+
+
+def _solve_single(request: SolveRequest, start_time: float) -> SolveResult:
+    """Run the CP-SAT solver on a single (possibly partitioned) problem."""
     # 1. Build indexed problem data
-    logger.info("building_problem_data")
     problem = ProblemData.from_request(request)
     model = cp_model.CpModel()
 
     # 2. Create decision variables (with pre-filtering)
-    logger.info(
-        "creating_variables",
-        num_sessions=len(problem.sessions),
-        num_rooms=len(problem.rooms),
-        num_time_slots=len(problem.time_slots),
-    )
     assign, teach = create_variables(model, problem)
-    logger.info(
-        "variables_created",
-        num_assign_vars=len(assign),
-        num_teach_vars=len(teach),
-    )
 
     if not assign:
-        # No feasible variable exists at all
         return SolveResult(
-            job_id="",  # Will be set by caller
+            job_id="",
             tenant_id=request.tenant_id,
             schedule_id=request.schedule_id,
             status=SolveResultStatus.INFEASIBLE,
@@ -80,11 +266,8 @@ def solve(request: SolveRequest) -> SolveResult:
         )
 
     # 3. Add constraints
-    logger.info("adding_hard_constraints")
     add_hard_constraints(model, assign, teach, problem)
-    logger.info("adding_soft_constraints")
     penalty_vars = add_soft_constraints_and_objective(model, assign, teach, problem)
-    logger.info("constraints_added")
 
     # 4. Configure solver
     solver = cp_model.CpSolver()
@@ -104,7 +287,7 @@ def solve(request: SolveRequest) -> SolveResult:
     status = solver.solve(model)
     wall_time = time.monotonic() - start_time
 
-    # 6. Map CP-SAT status to our enum
+    # 6. Map CP-SAT status
     status_map = {
         cp_model.OPTIMAL: SolverStatus.OPTIMAL,
         cp_model.FEASIBLE: SolverStatus.FEASIBLE,
