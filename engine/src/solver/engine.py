@@ -413,7 +413,7 @@ async def run_solve_job(job_id: str, request: SolveRequest) -> None:
             hashlib.sha256,
         ).hexdigest()
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 request.callback_url,
                 content=payload,
@@ -429,5 +429,11 @@ async def run_solve_job(job_id: str, request: SolveRequest) -> None:
                 status_code=response.status_code,
             )
 
-    except Exception:
-        logger.exception("solve_job_failed", job_id=job_id)
+    except Exception as e:
+        import traceback
+        logger.error(
+            "solve_job_failed",
+            job_id=job_id,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
