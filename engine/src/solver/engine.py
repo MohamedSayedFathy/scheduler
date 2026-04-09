@@ -206,7 +206,7 @@ def _solve_partitioned(
             schedule_id=original_request.schedule_id,
             status=SolveResultStatus.SOLVED,
             entries=all_entries,
-            conflicts=all_conflicts if all_conflicts else None,
+            conflicts=all_conflicts,
             stats=SolverStats(
                 status=worst_status,
                 wall_time_seconds=round(wall_time, 3),
