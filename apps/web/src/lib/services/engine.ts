@@ -167,11 +167,11 @@ export async function triggerSolve(
     const weekSlotIds = weekSlots.map((s) => s.id);
 
     // Map session type to required room type for room pre-filtering
-    const sessionTypeToRoomType: Record<string, string> = {
+    const sessionTypeToRoomType = {
       lecture: 'lecture_hall',
       tutorial: 'tutorial_room',
       lab: 'lab',
-    };
+    } as const;
 
     for (const session of allSessions) {
       const course = courseMap.get(session.courseId);
