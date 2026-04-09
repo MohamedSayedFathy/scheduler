@@ -166,6 +166,13 @@ export async function triggerSolve(
     const weekSlots = slotsByWeek.get(weekNum)!;
     const weekSlotIds = weekSlots.map((s) => s.id);
 
+    // Map session type to required room type for room pre-filtering
+    const sessionTypeToRoomType: Record<string, string> = {
+      lecture: 'lecture_hall',
+      tutorial: 'tutorial_room',
+      lab: 'lab',
+    };
+
     for (const session of allSessions) {
       const course = courseMap.get(session.courseId);
       if (!course) continue;
@@ -182,6 +189,7 @@ export async function triggerSolve(
           durationSlots: session.durationSlots,
           lecturerIds: lIds,
           studentGroupIds: sgIds,
+          requiredRoomType: sessionTypeToRoomType[session.sessionType],
           requiredEquipment: [],
           allowedTimeSlotIds: weekSlotIds,
         });
