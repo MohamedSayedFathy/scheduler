@@ -50,14 +50,20 @@ def create_variables(
             if not problem.is_feasible_assignment(s_idx, r_idx):
                 continue
 
-            for t_idx in range(len(problem.time_slots)):
+            # Only iterate over candidate time slots (allowed set or all)
+            candidate_slots = (
+                sorted(allowed_t_indices) if allowed_t_indices is not None
+                else range(len(problem.time_slots))
+            )
+
+            for t_idx in candidate_slots:
                 # Multi-slot: get occupied slots chain
                 occupied = problem.get_occupied_slots(s_idx, t_idx)
                 if occupied is None:
                     continue
 
-                # Skip if any occupied slot is not in allowed set
-                if allowed_t_indices is not None:
+                # For multi-slot, verify ALL occupied slots are in allowed set
+                if allowed_t_indices is not None and len(occupied) > 1:
                     if not all(ot in allowed_t_indices for ot in occupied):
                         continue
 
