@@ -39,19 +39,15 @@ def _each_session_assigned_once(
     problem: ProblemData,
 ) -> None:
     """HC1: Every session must be scheduled in exactly one room at one time slot."""
+    # Group assign vars by session for efficient lookup
+    session_vars_map: defaultdict[int, list[cp_model.IntVar]] = defaultdict(list)
+    for (s_idx, r_idx, t_idx), var in assign.items():
+        session_vars_map[s_idx].append(var)
+
     for s_idx in range(len(problem.sessions)):
-        session_vars = [
-            assign[(s_idx, r_idx, t_idx)]
-            for r_idx in range(len(problem.rooms))
-            for t_idx in range(len(problem.time_slots))
-            if (s_idx, r_idx, t_idx) in assign
-        ]
+        session_vars = session_vars_map.get(s_idx, [])
         if session_vars:
             model.add(sum(session_vars) == 1)
-        else:
-            # No feasible assignment exists — model will be infeasible
-            # This is caught at the solver level
-            pass
 
 
 def _each_session_one_lecturer(
@@ -146,12 +142,20 @@ def _no_lecturer_double_booking(
     # Identify which sessions are in teach (multi-lecturer)
     teach_sessions: set[int] = {s_idx for (s_idx, _) in teach}
 
+    # Find all time slots relevant to each lecturer (only slots where their sessions exist)
+    lecturer_relevant_slots: defaultdict[int, set[int]] = defaultdict(set)
+    for l_idx in range(len(problem.lecturers)):
+        for s_idx in problem.lecturer_sessions.get(l_idx, []):
+            for t_idx in range(len(problem.time_slots)):
+                if (s_idx, t_idx) in session_at_t:
+                    lecturer_relevant_slots[l_idx].add(t_idx)
+
     for l_idx in range(len(problem.lecturers)):
         lecturer_sessions = problem.lecturer_sessions.get(l_idx, [])
         if not lecturer_sessions:
             continue
 
-        for t_idx in range(len(problem.time_slots)):
+        for t_idx in lecturer_relevant_slots.get(l_idx, set()):
             blocking_vars: list[cp_model.IntVar] = []
 
             for s_idx in lecturer_sessions:
@@ -187,6 +191,11 @@ def _no_student_group_double_booking(
 
     Duration-aware: same expansion as HC2, keyed by (sg_idx, t_idx).
     """
+    # Pre-index assign vars by session for O(1) lookup
+    assign_by_session: defaultdict[int, list[tuple[int, int, cp_model.IntVar]]] = defaultdict(list)
+    for (s_idx, r_idx, t_start), var in assign.items():
+        assign_by_session[s_idx].append((r_idx, t_start, var))
+
     sg_time_vars: defaultdict[tuple[int, int], list[cp_model.IntVar]] = defaultdict(list)
 
     for sg_idx in range(len(problem.student_groups)):
@@ -195,9 +204,7 @@ def _no_student_group_double_booking(
             continue
 
         for s_idx in sg_sessions:
-            for (si, r_idx, t_start), var in assign.items():
-                if si != s_idx:
-                    continue
+            for r_idx, t_start, var in assign_by_session.get(s_idx, []):
                 occupied = problem.get_occupied_slots(s_idx, t_start)
                 if occupied is None:
                     continue

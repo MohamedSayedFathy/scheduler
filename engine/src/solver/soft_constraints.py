@@ -46,6 +46,11 @@ def _lecturer_room_preferences(
     """SC1: Penalize when lecturers are not in their preferred rooms."""
     penalty_vars: list[cp_model.IntVar] = []
 
+    # Pre-index assign vars by session
+    assign_by_session: dict[int, list[tuple[int, int]]] = {}
+    for (s_idx, r_idx, t_idx) in assign:
+        assign_by_session.setdefault(s_idx, []).append((r_idx, t_idx))
+
     for l_idx, lecturer in enumerate(problem.lecturers):
         preferred_rooms = {
             problem.room_idx[rid]
@@ -59,12 +64,9 @@ def _lecturer_room_preferences(
             # Skip multi-lecturer sessions for v1
             if (s_idx, l_idx) in teach:
                 continue
-            for r_idx in range(len(problem.rooms)):
-                if r_idx in preferred_rooms:
-                    continue  # No penalty for preferred room
-                for t_idx in range(len(problem.time_slots)):
-                    if (s_idx, r_idx, t_idx) in assign:
-                        penalty_vars.append(assign[(s_idx, r_idx, t_idx)])
+            for r_idx, t_idx in assign_by_session.get(s_idx, []):
+                if r_idx not in preferred_rooms:
+                    penalty_vars.append(assign[(s_idx, r_idx, t_idx)])
 
     if not penalty_vars:
         return None
@@ -83,6 +85,11 @@ def _lecturer_time_preferences(
     """SC2: Penalize when lecturers are scheduled outside preferred time slots."""
     penalty_vars: list[cp_model.IntVar] = []
 
+    # Pre-index assign vars by session
+    assign_by_session: dict[int, list[tuple[int, int]]] = {}
+    for (s_idx, r_idx, t_idx) in assign:
+        assign_by_session.setdefault(s_idx, []).append((r_idx, t_idx))
+
     for l_idx, lecturer in enumerate(problem.lecturers):
         preferred_slots = {
             problem.time_slot_idx[tsid]
@@ -96,12 +103,9 @@ def _lecturer_time_preferences(
             # Skip multi-lecturer sessions for v1
             if (s_idx, l_idx) in teach:
                 continue
-            for t_idx in range(len(problem.time_slots)):
-                if t_idx in preferred_slots:
-                    continue  # No penalty for preferred slot
-                for r_idx in range(len(problem.rooms)):
-                    if (s_idx, r_idx, t_idx) in assign:
-                        penalty_vars.append(assign[(s_idx, r_idx, t_idx)])
+            for r_idx, t_idx in assign_by_session.get(s_idx, []):
+                if t_idx not in preferred_slots:
+                    penalty_vars.append(assign[(s_idx, r_idx, t_idx)])
 
     if not penalty_vars:
         return None

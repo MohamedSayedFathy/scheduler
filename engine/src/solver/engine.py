@@ -149,8 +149,9 @@ def _solve_partitioned(
     total_conflicts_count = 0
     worst_status = SolverStatus.OPTIMAL
 
-    # Per-week timeout: divide total time budget across weeks
-    per_week_timeout = max(10, original_request.solver_config.timeout_seconds // len(sub_requests))
+    # Per-week timeout: each weekly sub-problem is ~17x smaller than the original,
+    # so it should solve much faster. Allow 30s per week.
+    per_week_timeout = 30
 
     for i, sub_req in enumerate(sub_requests):
         week_start = time.monotonic()
