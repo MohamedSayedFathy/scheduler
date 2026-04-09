@@ -1,5 +1,6 @@
 """Solver orchestrator — ties together variables, constraints, and solution extraction."""
 
+import asyncio
 import hashlib
 import hmac
 import time
@@ -200,7 +201,9 @@ def _extract_soft_scores(
 async def run_solve_job(job_id: str, request: SolveRequest) -> None:
     """Background task: run solver and POST result back to callback URL."""
     try:
-        result = solve(request)
+        # Run CPU-bound solver in a thread pool to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, solve, request)
         result.job_id = job_id
 
         # Sign the payload with HMAC
