@@ -41,11 +41,23 @@ def solve(request: SolveRequest) -> SolveResult:
     start_time = time.monotonic()
 
     # 1. Build indexed problem data
+    logger.info("building_problem_data")
     problem = ProblemData.from_request(request)
     model = cp_model.CpModel()
 
     # 2. Create decision variables (with pre-filtering)
+    logger.info(
+        "creating_variables",
+        num_sessions=len(problem.sessions),
+        num_rooms=len(problem.rooms),
+        num_time_slots=len(problem.time_slots),
+    )
     assign, teach = create_variables(model, problem)
+    logger.info(
+        "variables_created",
+        num_assign_vars=len(assign),
+        num_teach_vars=len(teach),
+    )
 
     if not assign:
         # No feasible variable exists at all
@@ -68,8 +80,11 @@ def solve(request: SolveRequest) -> SolveResult:
         )
 
     # 3. Add constraints
+    logger.info("adding_hard_constraints")
     add_hard_constraints(model, assign, teach, problem)
+    logger.info("adding_soft_constraints")
     penalty_vars = add_soft_constraints_and_objective(model, assign, teach, problem)
+    logger.info("constraints_added")
 
     # 4. Configure solver
     solver = cp_model.CpSolver()
