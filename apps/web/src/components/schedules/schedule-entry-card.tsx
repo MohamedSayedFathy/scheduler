@@ -1,5 +1,6 @@
 'use client';
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 type SessionType = 'lecture' | 'tutorial' | 'lab';
@@ -54,20 +55,22 @@ export interface ScheduleEntryData {
 interface ScheduleEntryCardProps {
   entry: ScheduleEntryData;
   onClick: (entry: ScheduleEntryData) => void;
+  conflicted?: boolean;
+  conflictMessages?: string[];
 }
 
-export function ScheduleEntryCard({ entry, onClick }: ScheduleEntryCardProps) {
+export function ScheduleEntryCard({ entry, onClick, conflicted, conflictMessages }: ScheduleEntryCardProps) {
   const style = sessionTypeStyles[entry.sessionType];
 
-  return (
+  const button = (
     <button
       type="button"
       onClick={() => onClick(entry)}
       className={cn(
         'w-full rounded-md border p-2 text-left transition-shadow hover:shadow-md cursor-pointer',
         style.bg,
-        style.border,
         style.text,
+        conflicted ? 'border-2 border-destructive' : style.border,
       )}
     >
       <p className="text-xs font-bold truncate">{entry.courseCode}</p>
@@ -80,4 +83,23 @@ export function ScheduleEntryCard({ entry, onClick }: ScheduleEntryCardProps) {
       )}
     </button>
   );
+
+  if (conflicted && conflictMessages && conflictMessages.length > 0) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <ul className="space-y-1 text-xs">
+              {conflictMessages.map((msg, i) => (
+                <li key={i}>{msg}</li>
+              ))}
+            </ul>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return button;
 }

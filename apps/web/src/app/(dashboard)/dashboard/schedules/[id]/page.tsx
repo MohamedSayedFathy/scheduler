@@ -10,12 +10,17 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScheduleStatusBadge } from '@/components/ui/status-badge';
+import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/trpc/client';
+import { detectConflicts, type Conflict } from '@/lib/schedules/conflicts';
 
+import { ConflictWarningDialog } from '@/components/schedules/conflict-warning-dialog';
 import { EntryDetailDialog } from '@/components/schedules/entry-detail-dialog';
+import { MoveScopeDialog } from '@/components/schedules/move-scope-dialog';
 import type { ScheduleEntryData } from '@/components/schedules/schedule-entry-card';
 import { TimetableFilters } from '@/components/schedules/timetable-filters';
 import { TimetableGrid } from '@/components/schedules/timetable-grid';
+import { VersionSelector } from '@/components/schedules/version-selector';
 import {
   buildWeekList,
   isoWeekKey,
@@ -39,9 +44,17 @@ function formatSolverTime(seconds: number): string {
   return `${seconds.toFixed(1)}s`;
 }
 
+interface PendingDrop {
+  entry: ScheduleEntryData;
+  targetDayOfWeek: string;
+  targetStartTime: string;
+  newConflicts: Conflict[];
+}
+
 export default function ScheduleDetailPage() {
   const params = useParams<{ id: string }>();
   const scheduleId = params.id;
+  const { toast } = useToast();
 
   const { data: schedule, isLoading: scheduleLoading } = api.schedules.getById.useQuery(
     { id: scheduleId },
@@ -59,6 +72,18 @@ export default function ScheduleDetailPage() {
   const { data: allTimeSlots } = api.timeSlots.list.useQuery();
   const { data: studentGroups } = api.studentGroups.list.useQuery();
 
+  const utils = api.useUtils();
+
+  const moveEntry = api.schedules.moveEntry.useMutation({
+    onSuccess: () => {
+      utils.schedules.getById.invalidate({ id: scheduleId });
+      toast({ title: 'Entry moved', description: 'Schedule entry updated successfully.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to move entry', description: error.message, variant: 'destructive' });
+    },
+  });
+
   // Filters
   const [selectedLecturer, setSelectedLecturer] = useState<string | null>(null);
   const [selectedStudentGroup, setSelectedStudentGroup] = useState<string | null>(null);
@@ -71,6 +96,11 @@ export default function ScheduleDetailPage() {
   // Entry detail dialog
   const [selectedEntry, setSelectedEntry] = useState<ScheduleEntryData | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // DnD drop flow state
+  const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
+  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
 
   // Build lookup maps
   const courseMap = useMemo(() => {
@@ -143,13 +173,79 @@ export default function ScheduleDetailPage() {
     });
   }, [schedule?.entries, courseMap, lecturersBySessionMap, studentGroupsByCourseMap]);
 
+  // Conflict detection on current entries
+  const conflictInputSessions = useMemo(() => {
+    if (!schedule?.entries) return [];
+    const sessionTypeToRoomType: Record<string, string> = {
+      lecture: 'lecture_hall',
+      tutorial: 'tutorial_room',
+      lab: 'lab',
+    };
+    const sessionIds = [...new Set(schedule.entries.map((e) => e.session.id))];
+    return sessionIds.map((sid) => {
+      const e = schedule.entries.find((en) => en.session.id === sid);
+      if (!e) return null;
+      const lecturers = lecturersBySessionMap.get(sid)?.map((l) => l.lecturerId) ?? [];
+      const studentGroupIds = studentGroupsByCourseMap.get(e.session.courseId) ?? [];
+      return {
+        id: sid,
+        sessionType: e.session.sessionType,
+        requiredRoomType: sessionTypeToRoomType[e.session.sessionType],
+        durationSlots: e.session.durationSlots,
+        lecturerIds: lecturers,
+        studentGroupIds,
+      };
+    }).filter((s): s is NonNullable<typeof s> => s !== null);
+  }, [schedule?.entries, lecturersBySessionMap, studentGroupsByCourseMap]);
+
+  const conflicts = useMemo(() => {
+    if (!schedule?.entries || entryData.length === 0) return [] as Conflict[];
+    const roomList = allRooms?.map((r) => ({ id: r.id, capacity: r.capacity, roomType: r.roomType })) ?? [];
+    const tsList = allTimeSlots?.map((ts) => ({
+      id: ts.id,
+      dayOfWeek: ts.dayOfWeek,
+      startTime: ts.startTime,
+      endTime: ts.endTime,
+      date: ts.date,
+    })) ?? [];
+    const sgList = studentGroups?.map((sg) => ({ id: sg.id, size: sg.size })) ?? [];
+
+    return detectConflicts({
+      entries: entryData.map((e) => ({ id: e.entryId, sessionId: e.courseId, roomId: e.roomId, timeSlotId: e.timeSlotId })),
+      sessions: conflictInputSessions,
+      rooms: roomList,
+      timeSlots: tsList,
+      studentGroups: sgList,
+      lecturerAvailability: new Map(),
+    });
+  }, [entryData, conflictInputSessions, allRooms, allTimeSlots, studentGroups, schedule?.entries]);
+
+  const conflictedEntryIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of conflicts) {
+      for (const id of c.entryIds) ids.add(id);
+    }
+    return ids;
+  }, [conflicts]);
+
+  const conflictsByEntryId = useMemo(() => {
+    const map = new Map<string, Conflict[]>();
+    for (const c of conflicts) {
+      for (const id of c.entryIds) {
+        const existing = map.get(id) ?? [];
+        existing.push(c);
+        map.set(id, existing);
+      }
+    }
+    return map;
+  }, [conflicts]);
+
   // Compute available weeks from entry dates and initialise the selected week
   const availableWeeks = useMemo(() => buildWeekList(entryData.map((e) => e.date)), [entryData]);
 
-  // Once we have weeks, initialise to the first week that has entries, or current week if it exists
   useEffect(() => {
     if (availableWeeks.length === 0) return;
-    if (selectedWeekKey !== null) return; // already set
+    if (selectedWeekKey !== null) return;
 
     const todayKey = isoWeekKey(new Date().toISOString().slice(0, 10));
     const todayExists = availableWeeks.some(
@@ -172,7 +268,7 @@ export default function ScheduleDetailPage() {
     return entryData.filter((e) => isoWeekKey(e.date) === selectedWeekKey);
   }, [entryData, selectedWeekKey, availableWeeks]);
 
-  // Build unique lecturer options from the session lecturer data returned by the router
+  // Build unique lecturer options
   const lecturerOptions = useMemo(() => {
     if (!schedule?.lecturersBySession) return [] as { id: string; label: string }[];
     const seen = new Set<string>();
@@ -197,7 +293,6 @@ export default function ScheduleDetailPage() {
     return allRooms.map((r) => ({ id: r.id, label: r.name }));
   }, [allRooms]);
 
-  // Build unique course options from the entries present in this schedule
   const courseOptions = useMemo(() => {
     const seen = new Set<string>();
     const options: { id: string; label: string }[] = [];
@@ -210,7 +305,6 @@ export default function ScheduleDetailPage() {
     return options;
   }, [entryData]);
 
-  // Filter function: returns true if entry matches all active filters
   const filterFn = useCallback(
     (entry: ScheduleEntryData): boolean => {
       if (selectedRoom && entry.roomId !== selectedRoom) return false;
@@ -229,8 +323,114 @@ export default function ScheduleDetailPage() {
     setDialogOpen(true);
   }
 
+  function handleEntryDrop(
+    entry: ScheduleEntryData,
+    targetDayOfWeek: string,
+    targetStartTime: string,
+  ) {
+    // If nothing changed, skip
+    if (entry.dayOfWeek === targetDayOfWeek && entry.startTime.slice(0, 5) === targetStartTime) return;
+
+    // Find the target time slot in the current week entries
+    const targetSlot = weekFilteredEntries.find(
+      (e) => e.dayOfWeek === targetDayOfWeek && e.startTime.slice(0, 5) === targetStartTime,
+    );
+
+    // Compute what the hypothetical new entry set would look like
+    // (replace all entries for this session with the new time slot)
+    const sessionId = getSessionIdForEntry(entry, schedule?.entries ?? []);
+    if (!sessionId) return;
+
+    const targetTimeSlotId = targetSlot?.timeSlotId;
+    if (!targetTimeSlotId) return; // Cell not covered by any slot — cancel drop
+
+    // Build hypothetical new entries for the current week
+    const hypotheticalEntries = weekFilteredEntries.map((e) => {
+      const eSessionId = getSessionIdForEntry(e, schedule?.entries ?? []);
+      if (eSessionId === sessionId) {
+        return { ...e, timeSlotId: targetTimeSlotId, dayOfWeek: targetDayOfWeek, startTime: targetStartTime };
+      }
+      return e;
+    });
+
+    // Detect conflicts in new state
+    const roomList = allRooms?.map((r) => ({ id: r.id, capacity: r.capacity, roomType: r.roomType })) ?? [];
+    const tsList = allTimeSlots?.map((ts) => ({
+      id: ts.id, dayOfWeek: ts.dayOfWeek, startTime: ts.startTime, endTime: ts.endTime, date: ts.date,
+    })) ?? [];
+    const sgList = studentGroups?.map((sg) => ({ id: sg.id, size: sg.size })) ?? [];
+
+    const newConflicts = detectConflicts({
+      entries: hypotheticalEntries.map((e) => ({
+        id: e.entryId,
+        sessionId: getSessionIdForEntry(e, schedule?.entries ?? []) ?? e.entryId,
+        roomId: e.roomId,
+        timeSlotId: e.timeSlotId,
+      })),
+      sessions: conflictInputSessions,
+      rooms: roomList,
+      timeSlots: tsList,
+      studentGroups: sgList,
+      lecturerAvailability: new Map(),
+    });
+
+    // Find newly introduced conflicts (not already present)
+    const existingConflictMessages = new Set(conflicts.map((c) => c.message));
+    const newlyIntroduced = newConflicts.filter((c) => !existingConflictMessages.has(c.message));
+
+    setPendingDrop({ entry, targetDayOfWeek, targetStartTime, newConflicts: newlyIntroduced });
+
+    if (newlyIntroduced.length > 0) {
+      setConflictDialogOpen(true);
+    } else {
+      setScopeDialogOpen(true);
+    }
+  }
+
+  function getSessionIdForEntry(
+    entry: ScheduleEntryData,
+    rawEntries: Array<{ entry: { id: string }; session: { id: string } }>,
+  ): string | null {
+    const found = rawEntries.find((e) => e.entry.id === entry.entryId);
+    return found?.session.id ?? null;
+  }
+
+  function executeMoveEntry(applyToAllWeeks: boolean) {
+    if (!pendingDrop) return;
+    const sessionId = getSessionIdForEntry(pendingDrop.entry, schedule?.entries ?? []);
+    if (!sessionId) return;
+
+    // Find the matching time slot id for the target
+    const targetSlot = weekFilteredEntries.find(
+      (e) =>
+        e.dayOfWeek === pendingDrop.targetDayOfWeek &&
+        e.startTime.slice(0, 5) === pendingDrop.targetStartTime,
+    );
+    if (!targetSlot) return;
+
+    moveEntry.mutate({
+      scheduleId,
+      sessionId,
+      newStartTimeSlotId: targetSlot.timeSlotId,
+      applyToAllWeeks,
+    });
+
+    setPendingDrop(null);
+  }
+
+  function handleConflictConfirm() {
+    setScopeDialogOpen(true);
+  }
+
+  function handleConflictCancel() {
+    setPendingDrop(null);
+  }
+
+  function handleScopeSelect(scope: 'this_week' | 'all_weeks') {
+    executeMoveEntry(scope === 'all_weeks');
+  }
+
   const handleDownloadPdf = useCallback(() => {
-    // PDF exports all weeks (all entries), then applies active column filters
     const filtered = hasActiveFilters ? entryData.filter(filterFn!) : entryData;
 
     const filterLabels: string[] = [];
@@ -258,7 +458,6 @@ export default function ScheduleDetailPage() {
     });
   }, [entryData, hasActiveFilters, filterFn, selectedLecturer, selectedStudentGroup, selectedRoom, selectedCourse, lecturerOptions, studentGroupOptions, roomOptions, courseOptions, schedule?.name]);
 
-  // Loading state
   if (scheduleLoading) {
     return (
       <div className="space-y-6">
@@ -301,7 +500,6 @@ export default function ScheduleDetailPage() {
 
   const stats = parseSolverStats(schedule.solverStats);
 
-  // Pending / Solving state
   if (schedule.status === 'pending' || schedule.status === 'solving') {
     return (
       <div className="space-y-6">
@@ -336,7 +534,6 @@ export default function ScheduleDetailPage() {
     );
   }
 
-  // Infeasible state
   if (schedule.status === 'infeasible') {
     return (
       <div className="space-y-6">
@@ -371,7 +568,6 @@ export default function ScheduleDetailPage() {
     );
   }
 
-  // Failed state
   if (schedule.status === 'failed') {
     return (
       <div className="space-y-6">
@@ -405,7 +601,6 @@ export default function ScheduleDetailPage() {
     );
   }
 
-  // Solved state -- show the timetable
   return (
     <div className="space-y-6">
       <Link
@@ -418,9 +613,12 @@ export default function ScheduleDetailPage() {
 
       {/* Schedule info bar */}
       <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">
-          {schedule.name ?? 'Untitled Schedule'}
-        </h1>
+        <div className="flex flex-wrap items-start gap-3">
+          <h1 className="text-3xl font-bold tracking-tight flex-1">
+            {schedule.name ?? 'Untitled Schedule'}
+          </h1>
+          <VersionSelector scheduleId={scheduleId} />
+        </div>
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <ScheduleStatusBadge status={schedule.status} />
           {stats?.wallTime != null && (
@@ -438,6 +636,12 @@ export default function ScheduleDetailPage() {
             <Hash className="h-4 w-4" />
             <span>{entryData.length} entries</span>
           </div>
+          {conflictedEntryIds.size > 0 && (
+            <div className="flex items-center gap-1 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <span>{conflictedEntryIds.size} conflicted</span>
+            </div>
+          )}
           <Button variant="outline" size="sm" className="ml-auto" onClick={handleDownloadPdf}>
             <Download className="mr-2 h-4 w-4" />
             Download PDF
@@ -472,11 +676,14 @@ export default function ScheduleDetailPage() {
         />
       )}
 
-      {/* Timetable Grid — scoped to the selected week */}
+      {/* Timetable Grid */}
       <TimetableGrid
         entries={weekFilteredEntries}
         onEntryClick={handleEntryClick}
         filterFn={hasActiveFilters ? filterFn : undefined}
+        conflictedEntryIds={conflictedEntryIds}
+        conflictsByEntryId={conflictsByEntryId}
+        onEntryDrop={handleEntryDrop}
       />
 
       {/* Entry Detail Dialog */}
@@ -494,6 +701,22 @@ export default function ScheduleDetailPage() {
           })) ?? []
         }
         scheduleId={scheduleId}
+      />
+
+      {/* Conflict warning dialog */}
+      <ConflictWarningDialog
+        open={conflictDialogOpen}
+        onOpenChange={setConflictDialogOpen}
+        conflicts={pendingDrop?.newConflicts ?? []}
+        onConfirm={handleConflictConfirm}
+        onCancel={handleConflictCancel}
+      />
+
+      {/* Move scope dialog */}
+      <MoveScopeDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        onSelect={handleScopeSelect}
       />
     </div>
   );
