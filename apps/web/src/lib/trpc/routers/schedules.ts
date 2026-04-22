@@ -78,12 +78,28 @@ export const schedulesRouter = createTRPCRouter({
               .select({
                 courseId: courseStudentGroups.courseId,
                 studentGroupId: courseStudentGroups.studentGroupId,
+                color: studentGroups.color,
               })
               .from(courseStudentGroups)
+              .innerJoin(studentGroups, eq(courseStudentGroups.studentGroupId, studentGroups.id))
               .where(inArray(courseStudentGroups.courseId, courseIds))
           : [];
 
-      return { ...schedule, entries, lecturersBySession, studentGroupsByCourse };
+      // Build a map from courseId → first attending group's color
+      const groupColorByCourse = new Map<string, string>();
+      for (const row of studentGroupsByCourse) {
+        if (!groupColorByCourse.has(row.courseId) && row.color) {
+          groupColorByCourse.set(row.courseId, row.color);
+        }
+      }
+
+      // Annotate each entry with groupColor
+      const entriesWithColor = entries.map((e) => ({
+        ...e,
+        groupColor: groupColorByCourse.get(e.session.courseId) ?? null,
+      }));
+
+      return { ...schedule, entries: entriesWithColor, lecturersBySession, studentGroupsByCourse };
     }),
 
   generate: adminProcedure
@@ -160,13 +176,14 @@ export const schedulesRouter = createTRPCRouter({
       z.object({
         scheduleId: z.string().uuid(),
         sessionId: z.string().uuid(),
+        currentTimeSlotId: z.string().uuid().optional(),
         newRoomId: z.string().uuid().optional(),
         newStartTimeSlotId: z.string().uuid().optional(),
         applyToAllWeeks: z.boolean(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { scheduleId, sessionId, newRoomId, newStartTimeSlotId, applyToAllWeeks } = input;
+      const { scheduleId, sessionId, currentTimeSlotId, newRoomId, newStartTimeSlotId, applyToAllWeeks } = input;
       const tenantId = ctx.session!.tenantId;
 
       // Tenant-scope: verify schedule belongs to this tenant
@@ -221,17 +238,17 @@ export const schedulesRouter = createTRPCRouter({
         weekGroups.set(weekKey, group);
       }
 
-      // If not applying to all weeks, only process the week of the first entry's current slot
-      // (the one being dragged). We take the first entry's week.
       let targetWeekKeys: string[];
       if (applyToAllWeeks) {
         targetWeekKeys = [...weekGroups.keys()];
       } else {
-        const firstEntry = currentEntries[0];
-        if (!firstEntry) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'No entries found for this session' });
+        const draggedEntry = currentTimeSlotId
+          ? currentEntries.find((e) => e.timeSlotId === currentTimeSlotId)
+          : currentEntries[0];
+        if (!draggedEntry) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Source entry not found for this session' });
         }
-        targetWeekKeys = [getISOWeekKey(firstEntry.date)];
+        targetWeekKeys = [getISOWeekKey(draggedEntry.date)];
       }
 
       // If newStartTimeSlotId is provided, we need to find the N consecutive slots
