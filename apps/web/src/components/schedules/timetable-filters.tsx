@@ -1,6 +1,6 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +29,8 @@ interface TimetableFiltersProps {
   onStudentGroupChange: (value: string | null) => void;
   onRoomChange: (value: string | null) => void;
   onCourseChange: (value: string | null) => void;
+  showConflictsOnly: boolean;
+  onShowConflictsOnlyChange: (value: boolean) => void;
 }
 
 export function TimetableFilters({
@@ -44,14 +46,17 @@ export function TimetableFilters({
   onStudentGroupChange,
   onRoomChange,
   onCourseChange,
+  showConflictsOnly,
+  onShowConflictsOnlyChange,
 }: TimetableFiltersProps) {
-  const hasFilters = selectedLecturer || selectedStudentGroup || selectedRoom || selectedCourse;
+  const hasFilters = selectedLecturer || selectedStudentGroup || selectedRoom || selectedCourse || showConflictsOnly;
 
   function clearAll() {
     onLecturerChange(null);
     onStudentGroupChange(null);
     onRoomChange(null);
     onCourseChange(null);
+    onShowConflictsOnlyChange(false);
   }
 
   return (
@@ -123,6 +128,16 @@ export function TimetableFilters({
           ))}
         </SelectContent>
       </Select>
+
+      <Button
+        variant={showConflictsOnly ? 'destructive' : 'outline'}
+        size="sm"
+        onClick={() => onShowConflictsOnlyChange(!showConflictsOnly)}
+        aria-pressed={showConflictsOnly}
+      >
+        <AlertTriangle className="mr-1 h-4 w-4" />
+        Conflicts only
+      </Button>
 
       {hasFilters && (
         <Button variant="ghost" size="sm" onClick={clearAll}>

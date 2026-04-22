@@ -49,6 +49,7 @@ export interface ScheduleEntryData {
   endTime: string;
   durationSlots: number;
   lecturerName?: string;
+  assignedLecturerName?: string | null;
   lecturerIds?: string[];
   courseId: string;
   studentGroupIds?: string[];
@@ -95,8 +96,10 @@ export function ScheduleEntryCard({ entry, onClick, conflicted, conflictMessages
         {sessionTypeLabels[entry.sessionType]}
       </p>
       <p className="text-[10px] leading-tight truncate">{entry.roomName}</p>
-      {entry.lecturerName && (
-        <p className="text-[10px] leading-tight truncate">{entry.lecturerName}</p>
+      {(entry.assignedLecturerName ?? entry.lecturerName) && (
+        <p className="text-[10px] leading-tight truncate">
+          {entry.assignedLecturerName ?? entry.lecturerName}
+        </p>
       )}
     </button>
   );

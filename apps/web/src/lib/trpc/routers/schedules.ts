@@ -11,6 +11,7 @@ import {
   lecturerDayExceptions,
   rooms,
   scheduleEntries,
+  scheduleEvents,
   scheduleVersions,
   sessionLecturers,
   studentGroups,
@@ -48,6 +49,7 @@ export const schedulesRouter = createTRPCRouter({
           session: courseSessions,
           room: rooms,
           timeSlot: timeSlots,
+          assignedLecturerId: scheduleEntries.assignedLecturerId,
         })
         .from(scheduleEntries)
         .innerJoin(courseSessions, eq(scheduleEntries.sessionId, courseSessions.id))
@@ -93,13 +95,49 @@ export const schedulesRouter = createTRPCRouter({
         }
       }
 
-      // Annotate each entry with groupColor
+      // Build userId → full name from the lecturersBySession rows
+      const userNameById = new Map<string, string>();
+      for (const row of lecturersBySession) {
+        if (!userNameById.has(row.lecturerId)) {
+          const name = [row.firstName, row.lastName].filter(Boolean).join(' ');
+          if (name) userNameById.set(row.lecturerId, name);
+        }
+      }
+
+      // Annotate each entry with groupColor and assignedLecturerName
       const entriesWithColor = entries.map((e) => ({
         ...e,
         groupColor: groupColorByCourse.get(e.session.courseId) ?? null,
+        assignedLecturerName: e.assignedLecturerId
+          ? (userNameById.get(e.assignedLecturerId) ?? null)
+          : null,
       }));
 
-      return { ...schedule, entries: entriesWithColor, lecturersBySession, studentGroupsByCourse };
+      const eventRows = await ctx.db
+        .select({
+          id: scheduleEvents.id,
+          title: scheduleEvents.title,
+          date: scheduleEvents.date,
+          startTime: scheduleEvents.startTime,
+          endTime: scheduleEvents.endTime,
+          roomId: scheduleEvents.roomId,
+          roomName: rooms.name,
+        })
+        .from(scheduleEvents)
+        .leftJoin(rooms, eq(scheduleEvents.roomId, rooms.id))
+        .where(eq(scheduleEvents.scheduleId, input.id));
+
+      const events = eventRows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        date: r.date,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        roomId: r.roomId,
+        roomName: r.roomName ?? null,
+      }));
+
+      return { ...schedule, entries: entriesWithColor, lecturersBySession, studentGroupsByCourse, events };
     }),
 
   generate: adminProcedure
@@ -179,11 +217,11 @@ export const schedulesRouter = createTRPCRouter({
         currentTimeSlotId: z.string().uuid().optional(),
         newRoomId: z.string().uuid().optional(),
         newStartTimeSlotId: z.string().uuid().optional(),
-        applyToAllWeeks: z.boolean(),
+        scope: z.enum(['this', 'future', 'past', 'all']),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { scheduleId, sessionId, currentTimeSlotId, newRoomId, newStartTimeSlotId, applyToAllWeeks } = input;
+      const { scheduleId, sessionId, currentTimeSlotId, newRoomId, newStartTimeSlotId, scope } = input;
       const tenantId = ctx.session!.tenantId;
 
       // Tenant-scope: verify schedule belongs to this tenant
@@ -212,6 +250,7 @@ export const schedulesRouter = createTRPCRouter({
           entryId: scheduleEntries.id,
           timeSlotId: scheduleEntries.timeSlotId,
           roomId: scheduleEntries.roomId,
+          assignedLecturerId: scheduleEntries.assignedLecturerId,
           date: timeSlots.date,
           dayOfWeek: timeSlots.dayOfWeek,
           startTime: timeSlots.startTime,
@@ -238,17 +277,38 @@ export const schedulesRouter = createTRPCRouter({
         weekGroups.set(weekKey, group);
       }
 
+      const anchorEntry = currentTimeSlotId
+        ? currentEntries.find((e) => e.timeSlotId === currentTimeSlotId)
+        : currentEntries[0];
+      if (!anchorEntry) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Source entry not found for this session' });
+      }
+      const anchorDate = anchorEntry.date;
+
+      const minDateByWeek = new Map<string, string>();
+      for (const [weekKey, entries] of weekGroups.entries()) {
+        const min = entries.reduce((acc, e) => (e.date < acc ? e.date : acc), entries[0]!.date);
+        minDateByWeek.set(weekKey, min);
+      }
+
       let targetWeekKeys: string[];
-      if (applyToAllWeeks) {
-        targetWeekKeys = [...weekGroups.keys()];
-      } else {
-        const draggedEntry = currentTimeSlotId
-          ? currentEntries.find((e) => e.timeSlotId === currentTimeSlotId)
-          : currentEntries[0];
-        if (!draggedEntry) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Source entry not found for this session' });
-        }
-        targetWeekKeys = [getISOWeekKey(draggedEntry.date)];
+      switch (scope) {
+        case 'this':
+          targetWeekKeys = [getISOWeekKey(anchorDate)];
+          break;
+        case 'future':
+          targetWeekKeys = [...weekGroups.keys()].filter(
+            (k) => (minDateByWeek.get(k) ?? '') >= anchorDate,
+          );
+          break;
+        case 'past':
+          targetWeekKeys = [...weekGroups.keys()].filter(
+            (k) => (minDateByWeek.get(k) ?? '') <= anchorDate,
+          );
+          break;
+        case 'all':
+          targetWeekKeys = [...weekGroups.keys()];
+          break;
       }
 
       // If newStartTimeSlotId is provided, we need to find the N consecutive slots
@@ -318,8 +378,9 @@ export const schedulesRouter = createTRPCRouter({
             newTimeSlotIds = weekEntries.map((e) => e.timeSlotId);
           }
 
-          // Determine new roomId
+          // Determine new roomId and preserve assigned lecturer
           const resolvedRoomId = newRoomId ?? (weekEntries[0]?.roomId ?? '');
+          const resolvedAssignedLecturerId = weekEntries[0]?.assignedLecturerId ?? null;
 
           // Insert new entries
           const newRows = newTimeSlotIds.map((tsId) => ({
@@ -327,6 +388,7 @@ export const schedulesRouter = createTRPCRouter({
             sessionId,
             roomId: resolvedRoomId,
             timeSlotId: tsId,
+            assignedLecturerId: resolvedAssignedLecturerId,
           }));
 
           if (newRows.length > 0) {
@@ -336,6 +398,304 @@ export const schedulesRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  deleteEntry: adminProcedure
+    .input(
+      z.object({
+        scheduleId: z.string().uuid(),
+        sessionId: z.string().uuid(),
+        currentTimeSlotId: z.string().uuid().optional(),
+        scope: z.enum(['this', 'future', 'past', 'all']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { scheduleId, sessionId, currentTimeSlotId, scope } = input;
+      const tenantId = ctx.session!.tenantId;
+
+      const [schedule] = await ctx.db
+        .select({ id: generatedSchedules.id })
+        .from(generatedSchedules)
+        .where(and(eq(generatedSchedules.id, scheduleId), eq(generatedSchedules.tenantId, tenantId)));
+      if (!schedule) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Schedule not found' });
+      }
+
+      const currentEntries = await ctx.db
+        .select({
+          entryId: scheduleEntries.id,
+          timeSlotId: scheduleEntries.timeSlotId,
+          date: timeSlots.date,
+        })
+        .from(scheduleEntries)
+        .innerJoin(timeSlots, eq(scheduleEntries.timeSlotId, timeSlots.id))
+        .where(
+          and(eq(scheduleEntries.scheduleId, scheduleId), eq(scheduleEntries.sessionId, sessionId)),
+        )
+        .orderBy(asc(timeSlots.date), asc(timeSlots.startTime));
+
+      if (currentEntries.length === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No entries found for this session' });
+      }
+
+      const weekGroups = new Map<string, typeof currentEntries>();
+      for (const entry of currentEntries) {
+        const weekKey = getISOWeekKey(entry.date);
+        const group = weekGroups.get(weekKey) ?? [];
+        group.push(entry);
+        weekGroups.set(weekKey, group);
+      }
+
+      const anchorEntry = currentTimeSlotId
+        ? currentEntries.find((e) => e.timeSlotId === currentTimeSlotId)
+        : currentEntries[0];
+      if (!anchorEntry) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Source entry not found for this session' });
+      }
+      const anchorDate = anchorEntry.date;
+
+      const minDateByWeek = new Map<string, string>();
+      for (const [weekKey, entries] of weekGroups.entries()) {
+        const min = entries.reduce((acc, e) => (e.date < acc ? e.date : acc), entries[0]!.date);
+        minDateByWeek.set(weekKey, min);
+      }
+
+      let targetWeekKeys: string[];
+      switch (scope) {
+        case 'this':
+          targetWeekKeys = [getISOWeekKey(anchorDate)];
+          break;
+        case 'future':
+          targetWeekKeys = [...weekGroups.keys()].filter(
+            (k) => (minDateByWeek.get(k) ?? '') >= anchorDate,
+          );
+          break;
+        case 'past':
+          targetWeekKeys = [...weekGroups.keys()].filter(
+            (k) => (minDateByWeek.get(k) ?? '') <= anchorDate,
+          );
+          break;
+        case 'all':
+          targetWeekKeys = [...weekGroups.keys()];
+          break;
+      }
+
+      const entryIdsToDelete = targetWeekKeys.flatMap(
+        (k) => (weekGroups.get(k) ?? []).map((e) => e.entryId),
+      );
+
+      if (entryIdsToDelete.length > 0) {
+        await ctx.db.transaction(async (tx) => {
+          await tx.delete(scheduleEntries).where(inArray(scheduleEntries.id, entryIdsToDelete));
+        });
+      }
+
+      return { success: true, deletedCount: entryIdsToDelete.length };
+    }),
+
+  createEvent: adminProcedure
+    .input(
+      z.object({
+        scheduleId: z.string().uuid(),
+        title: z.string().min(1).max(255),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        startTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+        roomId: z.string().uuid().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [schedule] = await ctx.db
+        .select({ id: generatedSchedules.id })
+        .from(generatedSchedules)
+        .where(
+          and(
+            eq(generatedSchedules.id, input.scheduleId),
+            eq(generatedSchedules.tenantId, ctx.session!.tenantId),
+          ),
+        );
+      if (!schedule) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Schedule not found' });
+      }
+
+      if (input.endTime <= input.startTime) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'End time must be after start time' });
+      }
+
+      const [row] = await ctx.db
+        .insert(scheduleEvents)
+        .values({
+          scheduleId: input.scheduleId,
+          title: input.title,
+          date: input.date,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          roomId: input.roomId,
+        })
+        .returning({ id: scheduleEvents.id });
+
+      return { eventId: row!.id };
+    }),
+
+  deleteEvent: adminProcedure
+    .input(z.object({ eventId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [row] = await ctx.db
+        .select({ id: scheduleEvents.id })
+        .from(scheduleEvents)
+        .innerJoin(generatedSchedules, eq(scheduleEvents.scheduleId, generatedSchedules.id))
+        .where(
+          and(
+            eq(scheduleEvents.id, input.eventId),
+            eq(generatedSchedules.tenantId, ctx.session!.tenantId),
+          ),
+        );
+      if (!row) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Event not found' });
+      }
+
+      await ctx.db.delete(scheduleEvents).where(eq(scheduleEvents.id, input.eventId));
+      return { success: true };
+    }),
+
+  createEmpty: adminProcedure
+    .input(z.object({ name: z.string().min(1).max(255).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const [row] = await ctx.db
+        .insert(generatedSchedules)
+        .values({
+          tenantId: ctx.session!.tenantId,
+          name: input.name ?? null,
+          status: 'solved',
+          generatedAt: new Date(),
+        })
+        .returning({ id: generatedSchedules.id });
+      if (!row) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create schedule' });
+      }
+      return { scheduleId: row.id };
+    }),
+
+  createEntry: adminProcedure
+    .input(
+      z.object({
+        scheduleId: z.string().uuid(),
+        sessionId: z.string().uuid(),
+        startTimeSlotId: z.string().uuid(),
+        roomId: z.string().uuid(),
+        assignedLecturerId: z.string().uuid().nullable(),
+        scope: z.enum(['this', 'future', 'past', 'all']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { scheduleId, sessionId, startTimeSlotId, roomId, assignedLecturerId, scope } = input;
+      const tenantId = ctx.session!.tenantId;
+
+      const [schedule] = await ctx.db
+        .select({ id: generatedSchedules.id })
+        .from(generatedSchedules)
+        .where(and(eq(generatedSchedules.id, scheduleId), eq(generatedSchedules.tenantId, tenantId)));
+      if (!schedule) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Schedule not found' });
+      }
+
+      const [session] = await ctx.db
+        .select({ durationSlots: courseSessions.durationSlots })
+        .from(courseSessions)
+        .where(eq(courseSessions.id, sessionId));
+      if (!session) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+      }
+      const durationSlots = session.durationSlots;
+
+      const [anchorSlot] = await ctx.db
+        .select({
+          dayOfWeek: timeSlots.dayOfWeek,
+          startTime: timeSlots.startTime,
+          date: timeSlots.date,
+        })
+        .from(timeSlots)
+        .where(and(eq(timeSlots.id, startTimeSlotId), eq(timeSlots.tenantId, tenantId)));
+      if (!anchorSlot) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Start time slot not found' });
+      }
+
+      const allTenantSlots = await ctx.db
+        .select({ id: timeSlots.id, dayOfWeek: timeSlots.dayOfWeek, startTime: timeSlots.startTime, date: timeSlots.date })
+        .from(timeSlots)
+        .where(eq(timeSlots.tenantId, tenantId))
+        .orderBy(asc(timeSlots.date), asc(timeSlots.startTime));
+
+      // Group all slots by ISO week
+      const allWeekGroups = new Map<string, typeof allTenantSlots>();
+      for (const slot of allTenantSlots) {
+        const wk = getISOWeekKey(slot.date);
+        const group = allWeekGroups.get(wk) ?? [];
+        group.push(slot);
+        allWeekGroups.set(wk, group);
+      }
+
+      const anchorWeekKey = getISOWeekKey(anchorSlot.date);
+      const anchorDate = anchorSlot.date;
+
+      // minDate per week (first date in that week)
+      const minDateByWeek = new Map<string, string>();
+      for (const [wk, slots] of allWeekGroups.entries()) {
+        const min = slots.reduce((acc, s) => (s.date < acc ? s.date : acc), slots[0]!.date);
+        minDateByWeek.set(wk, min);
+      }
+
+      let targetWeekKeys: string[];
+      switch (scope) {
+        case 'this':
+          targetWeekKeys = [anchorWeekKey];
+          break;
+        case 'future':
+          targetWeekKeys = [...allWeekGroups.keys()].filter(
+            (k) => (minDateByWeek.get(k) ?? '') >= anchorDate,
+          );
+          break;
+        case 'past':
+          targetWeekKeys = [...allWeekGroups.keys()].filter(
+            (k) => (minDateByWeek.get(k) ?? '') <= anchorDate,
+          );
+          break;
+        case 'all':
+          targetWeekKeys = [...allWeekGroups.keys()];
+          break;
+      }
+
+      let insertedCount = 0;
+      const skippedWeeks: string[] = [];
+
+      await ctx.db.transaction(async (tx) => {
+        for (const weekKey of targetWeekKeys) {
+          const weekSlots = (allWeekGroups.get(weekKey) ?? []).filter(
+            (s) => s.dayOfWeek === anchorSlot.dayOfWeek,
+          );
+          weekSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+          const startIdx = weekSlots.findIndex((s) => s.startTime === anchorSlot.startTime);
+          if (startIdx === -1 || startIdx + durationSlots > weekSlots.length) {
+            skippedWeeks.push(weekKey);
+            continue;
+          }
+
+          const slotIds = weekSlots.slice(startIdx, startIdx + durationSlots).map((s) => s.id);
+          await tx.insert(scheduleEntries).values(
+            slotIds.map((tsId) => ({
+              scheduleId,
+              sessionId,
+              roomId,
+              timeSlotId: tsId,
+              assignedLecturerId,
+            })),
+          );
+          insertedCount += slotIds.length;
+        }
+      });
+
+      return { insertedCount, skippedWeeks };
     }),
 
   saveVersion: adminProcedure
@@ -360,6 +720,7 @@ export const schedulesRouter = createTRPCRouter({
           sessionId: scheduleEntries.sessionId,
           roomId: scheduleEntries.roomId,
           timeSlotId: scheduleEntries.timeSlotId,
+          assignedLecturerId: scheduleEntries.assignedLecturerId,
         })
         .from(scheduleEntries)
         .where(eq(scheduleEntries.scheduleId, scheduleId));
@@ -501,6 +862,7 @@ export const schedulesRouter = createTRPCRouter({
         sessionId: e.sessionId,
         roomId: e.roomId,
         timeSlotId: e.timeSlotId,
+        assignedLecturerId: e.assignedLecturerId ?? null,
       }));
 
       const [version] = await ctx.db
@@ -571,7 +933,7 @@ export const schedulesRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Version not found' });
       }
 
-      type SnapshotEntry = { sessionId: string; roomId: string; timeSlotId: string };
+      type SnapshotEntry = { sessionId: string; roomId: string; timeSlotId: string; assignedLecturerId?: string | null };
       let snapshot: SnapshotEntry[];
       try {
         snapshot = JSON.parse(version.entriesSnapshot) as SnapshotEntry[];
@@ -593,6 +955,7 @@ export const schedulesRouter = createTRPCRouter({
                 sessionId: e.sessionId,
                 roomId: e.roomId,
                 timeSlotId: e.timeSlotId,
+                assignedLecturerId: e.assignedLecturerId ?? null,
               })),
             );
           }

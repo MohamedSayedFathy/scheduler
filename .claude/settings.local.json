@@ -15,7 +15,10 @@
       "Bash(python -m pytest tests/ -x --tb=short)",
       "Bash(node -e \"const m = require\\('/c/VSCode/scheduler/apps/web/node_modules/jspdf-autotable'\\); console.log\\('default:', typeof m.default, 'autoTable:', typeof m.autoTable\\)\")",
       "Bash(node -e \"const p = require\\('/c/VSCode/scheduler/node_modules/.pnpm/jspdf-autotable@5.0.7_jspdf@4.2.1/node_modules/jspdf-autotable/package.json'\\); console.log\\('main:', p.main, 'module:', p.module, 'types:', p.types\\)\")",
-      "Bash(find c:/VSCode/scheduler/engine/src -name \"*.py\" -exec grep -l \"duration_slots\\\\|CONTIGUOUS_MULTI_SLOT\" {} \\\\;)"
+      "Bash(find c:/VSCode/scheduler/engine/src -name \"*.py\" -exec grep -l \"duration_slots\\\\|CONTIGUOUS_MULTI_SLOT\" {} \\\\;)",
+      "Bash(python -c \"from src.solver.engine import solve, _solve_replicated; print\\('imports ok'\\)\")",
+      "Bash(python -m pytest tests/ -x --timeout=60)",
+      "Bash(\"/c/Program Files \\(x86\\)/Google/Cloud SDK/google-cloud-sdk/bin/gcloud\" builds submit --tag gcr.io/scheduler-492801/scheduler-engine:latest --timeout=15m)"
     ]
   }
 }

@@ -9,6 +9,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type Conflict } from '@/lib/schedules/conflicts';
 
+import { EventCard, type ScheduleEventData } from './event-card';
 import { ScheduleEntryCard, type ScheduleEntryData } from './schedule-entry-card';
 
 interface TimetableGridProps {
@@ -18,6 +19,9 @@ interface TimetableGridProps {
   conflictedEntryIds?: Set<string>;
   conflictsByEntryId?: Map<string, Conflict[]>;
   onEntryDrop?: (entry: ScheduleEntryData, targetDayOfWeek: string, targetStartTime: string) => void;
+  onEmptyCellClick?: (dayOfWeek: string, startMinutes: number) => void;
+  events?: ScheduleEventData[];
+  onEventClick?: (event: ScheduleEventData) => void;
 }
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -96,22 +100,37 @@ interface DroppableCellProps {
   rowIdx: number;
   colIdx: number;
   rowCount: number;
+  onClick?: (dayOfWeek: string, startMinutes: number) => void;
 }
 
-function DroppableCell({ dayOfWeek, startMinutes, rowIdx, colIdx }: DroppableCellProps) {
+function DroppableCell({ dayOfWeek, startMinutes, rowIdx, colIdx, onClick }: DroppableCellProps) {
   const droppableId = `${dayOfWeek}_${startMinutes}`;
   const { setNodeRef, isOver } = useDroppable({ id: droppableId });
+
+  const isInteractive = !!onClick;
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick?.(dayOfWeek, startMinutes);
+    }
+  }
 
   return (
     <div
       ref={setNodeRef}
-      className={rowIdx % 2 === 1 ? 'border-b border-muted' : 'border-b border-dashed border-muted/50'}
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-label={isInteractive ? `Add entry at ${dayOfWeek} ${minutesToLabel(startMinutes)}` : undefined}
+      className={`${rowIdx % 2 === 1 ? 'border-b border-muted' : 'border-b border-dashed border-muted/50'} ${isInteractive ? 'cursor-pointer hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring' : ''}`}
       style={{
         gridRow: rowIdx + 2,
         gridColumn: colIdx + 2,
         backgroundColor: isOver ? 'hsl(var(--primary) / 0.08)' : undefined,
         transition: 'background-color 0.1s',
       }}
+      onClick={isInteractive ? () => onClick(dayOfWeek, startMinutes) : undefined}
+      onKeyDown={isInteractive ? handleKeyDown : undefined}
     />
   );
 }
@@ -127,6 +146,9 @@ export function TimetableGrid({
   conflictedEntryIds,
   conflictsByEntryId,
   onEntryDrop,
+  onEmptyCellClick,
+  events = [],
+  onEventClick,
 }: TimetableGridProps) {
   const activeDays = useMemo(() => {
     const daySet = new Set(entries.map((e) => e.dayOfWeek));
@@ -175,6 +197,73 @@ export function TimetableGrid({
     const endMin = timeToMinutes(endTime);
     return Math.round((endMin - startMin) / SLOT_MINUTES);
   }
+
+  // Assign each entry a "lane" within its overlap cluster so overlapping
+  // entries render side-by-side instead of stacking on top of each other.
+  const laneMap = useMemo(() => {
+    const map = new Map<string, { lane: number; totalLanes: number }>();
+    const byDay = new Map<string, ScheduleEntryData[]>();
+    for (const e of entries) {
+      if (filterFn && !filterFn(e)) continue;
+      const list = byDay.get(e.dayOfWeek) ?? [];
+      list.push(e);
+      byDay.set(e.dayOfWeek, list);
+    }
+
+    for (const dayEntries of byDay.values()) {
+      const sorted = [...dayEntries].sort(
+        (a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime),
+      );
+      let cluster: ScheduleEntryData[] = [];
+      let clusterEnd = -1;
+      const flush = () => {
+        if (cluster.length === 0) return;
+        const lanes: number[] = [];
+        const assignments: { id: string; lane: number }[] = [];
+        for (const e of cluster) {
+          const s = timeToMinutes(e.startTime);
+          const en = timeToMinutes(e.endTime);
+          let laneIdx = lanes.findIndex((end) => end <= s);
+          if (laneIdx === -1) {
+            laneIdx = lanes.length;
+            lanes.push(en);
+          } else {
+            lanes[laneIdx] = en;
+          }
+          assignments.push({ id: e.entryId, lane: laneIdx });
+        }
+        const totalLanes = lanes.length;
+        for (const a of assignments) {
+          map.set(a.id, { lane: a.lane, totalLanes });
+        }
+      };
+      for (const e of sorted) {
+        const s = timeToMinutes(e.startTime);
+        const en = timeToMinutes(e.endTime);
+        if (cluster.length > 0 && s < clusterEnd) {
+          cluster.push(e);
+          clusterEnd = Math.max(clusterEnd, en);
+        } else {
+          flush();
+          cluster = [e];
+          clusterEnd = en;
+        }
+      }
+      flush();
+    }
+
+    return map;
+  }, [entries, filterFn]);
+
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, ScheduleEventData[]>();
+    for (const ev of events) {
+      const list = map.get(ev.dayOfWeek) ?? [];
+      list.push(ev);
+      map.set(ev.dayOfWeek, list);
+    }
+    return map;
+  }, [events]);
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -253,6 +342,7 @@ export function TimetableGrid({
                 rowIdx={rowIdx}
                 colIdx={colIdx}
                 rowCount={rowCount}
+                onClick={onEmptyCellClick}
               />
             );
           }),
@@ -270,6 +360,12 @@ export function TimetableGrid({
           const isConflicted = conflictedEntryIds?.has(entry.entryId) ?? false;
           const messages = conflictsByEntryId?.get(entry.entryId)?.map((c) => c.message);
 
+          const laneInfo = laneMap.get(entry.entryId);
+          const totalLanes = laneInfo?.totalLanes ?? 1;
+          const laneIdx = laneInfo?.lane ?? 0;
+          const widthPct = 100 / totalLanes;
+          const leftPct = laneIdx * widthPct;
+
           return (
             <div
               key={entry.entryId}
@@ -277,6 +373,8 @@ export function TimetableGrid({
               style={{
                 gridRow: `${rowStart} / span ${rowSpan}`,
                 gridColumn: colIdx + 2,
+                width: `${widthPct}%`,
+                marginLeft: `${leftPct}%`,
               }}
             >
               <DraggableCard
@@ -288,16 +386,49 @@ export function TimetableGrid({
             </div>
           );
         })}
+
+        {/* Per-day events overlay */}
+        {days.map((day, colIdx) => {
+          const dayEvents = eventsByDay.get(day) ?? [];
+          if (dayEvents.length === 0) return null;
+          return (
+            <div
+              key={`events-${day}`}
+              className="pointer-events-none relative"
+              style={{ gridRow: `2 / span ${rowCount}`, gridColumn: colIdx + 2, zIndex: 15 }}
+            >
+              {dayEvents.map((ev) => {
+                const startMin = timeToMinutes(ev.startTime);
+                const endMin = timeToMinutes(ev.endTime);
+                const top = ((startMin - minTime) / SLOT_MINUTES) * 32;
+                const height = Math.max(20, ((endMin - startMin) / SLOT_MINUTES) * 32);
+                return (
+                  <div
+                    key={ev.id}
+                    className="pointer-events-auto absolute left-0.5 right-0.5"
+                    style={{ top, height }}
+                  >
+                    <EventCard event={ev} onClick={onEventClick ?? (() => {})} />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     );
   }
 
   function renderDayList(day: string) {
     const dayEntries = entries
-      .filter((e) => e.dayOfWeek === day)
+      .filter((e) => e.dayOfWeek === day && (!filterFn || filterFn(e)))
       .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
-    if (dayEntries.length === 0) {
+    const dayEvents = (eventsByDay.get(day) ?? [])
+      .slice()
+      .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+
+    if (dayEntries.length === 0 && dayEvents.length === 0) {
       return (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No sessions on {DAY_LABELS[day]}
@@ -305,26 +436,48 @@ export function TimetableGrid({
       );
     }
 
+    type EntryItem = { kind: 'entry'; data: ScheduleEntryData };
+    type EventItem = { kind: 'event'; data: ScheduleEventData };
+    const combined: Array<EntryItem | EventItem> = [
+      ...dayEntries.map((e): EntryItem => ({ kind: 'entry', data: e })),
+      ...dayEvents.map((e): EventItem => ({ kind: 'event', data: e })),
+    ].sort((a, b) => timeToMinutes(a.data.startTime) - timeToMinutes(b.data.startTime));
+
     return (
       <div className="space-y-2">
-        {dayEntries.map((entry) => {
-          if (filterFn && !filterFn(entry)) return null;
-          const isConflicted = conflictedEntryIds?.has(entry.entryId) ?? false;
-          const messages = conflictsByEntryId?.get(entry.entryId)?.map((c) => c.message);
+        {combined.map((item) => {
+          if (item.kind === 'entry') {
+            const entry = item.data;
+            const isConflicted = conflictedEntryIds?.has(entry.entryId) ?? false;
+            const messages = conflictsByEntryId?.get(entry.entryId)?.map((c) => c.message);
+            return (
+              <div key={entry.entryId} className="flex items-start gap-3">
+                <div className="w-16 shrink-0 pt-2 text-xs text-muted-foreground text-right">
+                  {formatTime(entry.startTime)}
+                  <br />
+                  {formatTime(entry.endTime)}
+                </div>
+                <div className="flex-1">
+                  <ScheduleEntryCard
+                    entry={entry}
+                    onClick={onEntryClick}
+                    conflicted={isConflicted}
+                    conflictMessages={messages}
+                  />
+                </div>
+              </div>
+            );
+          }
+          const ev = item.data;
           return (
-            <div key={entry.entryId} className="flex items-start gap-3">
+            <div key={ev.id} className="flex items-start gap-3">
               <div className="w-16 shrink-0 pt-2 text-xs text-muted-foreground text-right">
-                {formatTime(entry.startTime)}
+                {formatTime(ev.startTime)}
                 <br />
-                {formatTime(entry.endTime)}
+                {formatTime(ev.endTime)}
               </div>
               <div className="flex-1">
-                <ScheduleEntryCard
-                  entry={entry}
-                  onClick={onEntryClick}
-                  conflicted={isConflicted}
-                  conflictMessages={messages}
-                />
+                <EventCard event={ev} onClick={onEventClick ?? (() => {})} />
               </div>
             </div>
           );

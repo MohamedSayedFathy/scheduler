@@ -74,17 +74,22 @@ export function buildWeekList(dates: string[]): WeekInfo[] {
       weekMap.set(key, {
         isoWeek,
         year,
-        label: `Week ${isoWeek}: ${dateRange}`,
+        label: dateRange,
         weekStart: toISODate(monday),
         weekEnd: toISODate(sunday),
       });
     }
   }
 
-  return Array.from(weekMap.values()).sort((a, b) => {
+  const sorted = Array.from(weekMap.values()).sort((a, b) => {
     if (a.year !== b.year) return a.year - b.year;
     return a.isoWeek - b.isoWeek;
   });
+
+  return sorted.map((w, i) => ({
+    ...w,
+    label: `Week ${i + 1}: ${w.label}`,
+  }));
 }
 
 /**

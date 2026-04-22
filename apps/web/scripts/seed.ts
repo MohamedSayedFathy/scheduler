@@ -124,12 +124,13 @@ const ROOMS_DATA = [
   { name: 'Etzelstraße 2',     building: 'Etzelstraße', capacity: 200, roomType: 'seminar_room'  as const, equipment: ['projector', 'whiteboard'] },
 ];
 
-// ── Student groups (4) ─────────────────────────────────────────────────
+// ── Student groups (5) ─────────────────────────────────────────────────
 const STUDENT_GROUPS_DATA = [
-  { name: 'Sem 2 Informatics', year: 2, size: 60, color: '#3B82F6' },
-  { name: 'Sem 4 Informatics', year: 4, size: 50, color: '#22C55E' },
-  { name: 'Sem 6 Informatics', year: 6, size: 40, color: '#F97316' },
-  { name: 'Management (MGT)',  year: 2, size: 40, color: '#1F2937' },
+  { name: 'Sem 2 Informatics',   year: 2, size: 60, color: '#3B82F6' },
+  { name: 'Sem 4 Informatics',   year: 4, size: 50, color: '#22C55E' },
+  { name: 'Sem 6 Informatics',   year: 6, size: 40, color: '#F97316' },
+  { name: 'Management (MGT)',    year: 2, size: 40, color: '#1F2937' },
+  { name: 'Sem 6 Electives',     year: 6, size: 30, color: '#EAB308' },
 ];
 
 // Group index constants for readability
@@ -137,6 +138,7 @@ const GRP_SEM2 = 0; // Sem 2 Informatics – blue
 const GRP_SEM4 = 1; // Sem 4 Informatics – green
 const GRP_SEM6 = 2; // Sem 6 Informatics – orange
 const GRP_MGT  = 3; // Management – black
+const GRP_SEM6_ELECTIVES = 4; // Sem 6 Electives – yellow
 
 // ── Courses (~45) ─────────────────────────────────────────────────────
 // lecturerIndices: indices into LECTURERS array (all of them teach this course at session level)
@@ -190,7 +192,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF204', name: 'Foundations of Cyber-Physical Systems',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Amr']!],
-    yearGroups: [GRP_SEM2],
+    yearGroups: [GRP_SEM4],
     sessions: [
       { type: 'lecture',  duration: 1, freq: 1 },
       { type: 'tutorial', duration: 1, freq: 1 },
@@ -282,7 +284,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF604', name: 'Algorithm Design for Competitive Challenges',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Kobourov']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -291,7 +293,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF605', name: 'Network Visualization for Competitive Challenges',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Kobourov']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -322,7 +324,7 @@ const COURSES_DATA: CourseDef[] = [
     lecturerIndices: [L['Luttenberger']!],
     yearGroups: [GRP_SEM6],
     sessions: [
-      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'lecture',  duration: 1, freq: 2 },
       { type: 'tutorial', duration: 1, freq: 1 },
     ],
   },
@@ -385,7 +387,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF615', name: 'Gamified Information Systems',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Sunyaev']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -394,7 +396,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF616', name: 'Seminar: Advanced Topics High-Performance Computing',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Anzt']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -403,7 +405,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF617', name: 'Seminar: Generative Models on Text',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Fraser']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -412,7 +414,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF618', name: 'AI-augmented BPM',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Pufahl']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -421,7 +423,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF619', name: 'PC: Building an Advanced BPM Research App',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Pufahl']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lab', duration: 1, freq: 1 },
     ],
@@ -430,7 +432,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF620', name: 'Building a BPM Research App',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Pufahl']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -439,7 +441,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF621', name: 'Hot Topics in BPM Research',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Pufahl']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -448,7 +450,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF622', name: 'Computer Networking and Internet',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Günther']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -457,7 +459,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF623', name: 'Security of Large Language Models',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Chen']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -466,7 +468,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF624', name: 'Software Engineering for Artificial Intelligence',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Wagner']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -475,7 +477,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF625', name: 'SE-Kolloquium: Software Engineering Research',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Wagner']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -484,7 +486,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF626', name: 'Exploratory Software Testing',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Chen']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -493,7 +495,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF627', name: 'AI-Empowered Automated Software Development',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Chen']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -502,7 +504,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF628', name: 'History of Computer Science',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Trinitis']!, L['Luttenberger']!, L['Anzt']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -511,7 +513,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF629', name: 'Exploring AI in Software Engineering',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Wagner']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -520,7 +522,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF630', name: 'Data Engineering Group 1',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Acosta']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -529,7 +531,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF631', name: 'Data Engineering Group 2',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Acosta']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -538,7 +540,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF632', name: 'Duckie Town',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Amr']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lab', duration: 1, freq: 1 },
     ],
@@ -547,7 +549,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF633', name: 'Next Gen Programming',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Wagner']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -556,7 +558,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF634', name: 'Applied Machine Learning',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Amr']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -565,7 +567,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF635', name: 'Human-centered Artifact Design',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Sunyaev']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -574,7 +576,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF636', name: 'Automate Mobile App Testing',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Chen']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -583,7 +585,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF637', name: 'BPC: Chatbot',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Tasch']!, L['Wagner']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -592,7 +594,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF638', name: 'Projects in Natural Language Processing',
     department: 'Informatics', credits: 5,
     lecturerIndices: [L['Fraser']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -601,7 +603,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF639', name: 'Block: Tools and Practice in Digital Research and Engineering',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Anzt']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -610,7 +612,7 @@ const COURSES_DATA: CourseDef[] = [
     code: 'INF640', name: 'Block: Disentangling Sustainability in IT',
     department: 'Informatics', credits: 3,
     lecturerIndices: [L['Pufahl']!],
-    yearGroups: [GRP_SEM6],
+    yearGroups: [GRP_SEM6_ELECTIVES],
     sessions: [
       { type: 'lecture', duration: 1, freq: 1 },
     ],
@@ -660,7 +662,7 @@ const COURSES_DATA: CourseDef[] = [
     lecturerIndices: [L['Volkmer']!],
     yearGroups: [GRP_MGT],
     sessions: [
-      { type: 'lecture', duration: 1, freq: 1 },
+      { type: 'lecture', duration: 1, freq: 2 },
     ],
   },
   {
@@ -669,7 +671,7 @@ const COURSES_DATA: CourseDef[] = [
     lecturerIndices: [L['Li']!],
     yearGroups: [GRP_MGT],
     sessions: [
-      { type: 'lecture', duration: 1, freq: 1 },
+      { type: 'lecture', duration: 2, freq: 2 },
     ],
   },
   {

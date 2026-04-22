@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { EngineSolveResultSchema } from '@scheduler/types';
 
@@ -59,8 +59,10 @@ export async function POST(req: Request) {
     })
     .where(eq(generatedSchedules.id, result.scheduleId));
 
+  const snapshotRows: { sessionId: string; roomId: string; timeSlotId: string; assignedLecturerId: string | null }[] = [];
+
   if (dbStatus === 'solved' && result.entries.length > 0) {
-    const rows: { scheduleId: string; sessionId: string; roomId: string; timeSlotId: string }[] = [];
+    const rows: { scheduleId: string; sessionId: string; roomId: string; timeSlotId: string; assignedLecturerId: string | null }[] = [];
 
     for (const entry of result.entries) {
       const baseSessionId = entry.sessionId.replace(/_w\d+_f\d+$/, '').replace(/_\d+$/, '');
@@ -71,6 +73,13 @@ export async function POST(req: Request) {
           sessionId: baseSessionId,
           roomId: entry.roomId,
           timeSlotId: tsId,
+          assignedLecturerId: entry.assignedLecturerId ?? null,
+        });
+        snapshotRows.push({
+          sessionId: baseSessionId,
+          roomId: entry.roomId,
+          timeSlotId: tsId,
+          assignedLecturerId: entry.assignedLecturerId ?? null,
         });
       }
     }
@@ -83,38 +92,43 @@ export async function POST(req: Request) {
     console.info(
       `[Engine Webhook] Inserted ${rows.length} schedule entries for ${result.scheduleId}`,
     );
+  }
 
-    // Auto-save an "Original" version so users can always roll back to the
-    // solver output even after manual edits. Matches the snapshot shape used
-    // by saveVersion / restoreVersion in the schedules tRPC router.
+  if (dbStatus === 'solved') {
     try {
-      const [schedule] = await db
-        .select({ tenantId: generatedSchedules.tenantId })
-        .from(generatedSchedules)
-        .where(eq(generatedSchedules.id, result.scheduleId));
+      const [existing] = await db
+        .select({ id: scheduleVersions.id })
+        .from(scheduleVersions)
+        .where(
+          and(
+            eq(scheduleVersions.scheduleId, result.scheduleId),
+            eq(scheduleVersions.name, 'Original'),
+          ),
+        )
+        .limit(1);
 
-      if (schedule) {
-        const snapshot = rows.map((r) => ({
-          sessionId: r.sessionId,
-          roomId: r.roomId,
-          timeSlotId: r.timeSlotId,
-        }));
+      if (!existing) {
+        const [schedule] = await db
+          .select({ tenantId: generatedSchedules.tenantId })
+          .from(generatedSchedules)
+          .where(eq(generatedSchedules.id, result.scheduleId));
 
-        await db.insert(scheduleVersions).values({
-          scheduleId: result.scheduleId,
-          tenantId: schedule.tenantId,
-          name: 'Original',
-          entriesSnapshot: JSON.stringify(snapshot),
-          conflictCount: 0,
-          createdBy: null,
-        });
+        if (schedule) {
+          await db.insert(scheduleVersions).values({
+            scheduleId: result.scheduleId,
+            tenantId: schedule.tenantId,
+            name: 'Original',
+            entriesSnapshot: JSON.stringify(snapshotRows),
+            conflictCount: 0,
+            createdBy: null,
+          });
 
-        console.info(
-          `[Engine Webhook] Saved "Original" version for schedule ${result.scheduleId}`,
-        );
+          console.info(
+            `[Engine Webhook] Saved "Original" version for schedule ${result.scheduleId}`,
+          );
+        }
       }
     } catch (err) {
-      // Non-fatal: if the version row fails, the schedule is still usable.
       console.error(
         `[Engine Webhook] Failed to save "Original" version for ${result.scheduleId}:`,
         err,

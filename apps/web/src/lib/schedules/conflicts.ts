@@ -11,10 +11,11 @@ export interface Conflict {
   message: string;
   entryIds: string[];
   involvedSessionIds: string[];
+  scope?: { kind: 'room' | 'lecturer' | 'student_group'; id: string };
 }
 
 export interface ConflictInputs {
-  entries: Array<{ id: string; sessionId: string; roomId: string; timeSlotId: string }>;
+  entries: Array<{ id: string; sessionId: string; roomId: string; timeSlotId: string; assignedLecturerId?: string | null }>;
   sessions: Array<{
     id: string;
     sessionType: string;
@@ -27,101 +28,158 @@ export interface ConflictInputs {
   timeSlots: Array<{ id: string; dayOfWeek: string; startTime: string; endTime: string; date: string }>;
   studentGroups: Array<{ id: string; size: number }>;
   lecturerAvailability: Map<string, Set<string>>;
+  resolveName?: (kind: 'room' | 'lecturer' | 'student_group', id: string) => string | undefined;
+}
+
+function toMinutes(time: string): number {
+  const [h = '0', m = '0'] = time.split(':');
+  return parseInt(h, 10) * 60 + parseInt(m, 10);
+}
+
+function formatDateShort(date: string): string {
+  // date is YYYY-MM-DD; produce e.g. "Mon 2026-04-27"
+  const d = new Date(date + 'T00:00:00');
+  const day = d.toLocaleDateString('en-GB', { weekday: 'short' });
+  return `${day} ${date}`;
+}
+
+function formatTimeRange(startTime: string, endTime: string): string {
+  return `${startTime.slice(0, 5)}–${endTime.slice(0, 5)}`;
 }
 
 export function detectConflicts(inputs: ConflictInputs): Conflict[] {
-  const { entries, sessions, rooms, studentGroups, lecturerAvailability } = inputs;
+  const { entries, sessions, rooms, timeSlots, studentGroups, lecturerAvailability, resolveName } = inputs;
 
   const sessionMap = new Map(sessions.map((s) => [s.id, s]));
   const roomMap = new Map(rooms.map((r) => [r.id, r]));
   const studentGroupMap = new Map(studentGroups.map((sg) => [sg.id, sg]));
+  const tsById = new Map(timeSlots.map((ts) => [ts.id, ts]));
 
   const conflicts: Conflict[] = [];
 
-  // Rule 1: Room double-booking — group by (roomId, timeSlotId)
-  const roomTimeKey = new Map<string, { entryIds: string[]; sessionIds: string[] }>();
-  for (const entry of entries) {
-    const key = `${entry.roomId}::${entry.timeSlotId}`;
-    const existing = roomTimeKey.get(key);
-    if (existing) {
-      existing.entryIds.push(entry.id);
-      existing.sessionIds.push(entry.sessionId);
-    } else {
-      roomTimeKey.set(key, { entryIds: [entry.id], sessionIds: [entry.sessionId] });
-    }
-  }
-  for (const { entryIds, sessionIds } of roomTimeKey.values()) {
-    if (entryIds.length > 1) {
-      const room = roomMap.get(entries.find((e) => entryIds.includes(e.id))!.roomId);
-      conflicts.push({
-        kind: 'room_double_booking',
-        message: `Room "${room?.roomType ?? 'unknown'}" is double-booked at the same time slot`,
-        entryIds,
-        involvedSessionIds: [...new Set(sessionIds)],
-      });
-    }
-  }
+  // Shared helper: for each (scopeId, date) bucket, sort by startMin and emit
+  // one conflict per overlapping pair (a.endMin > b.startMin).
+  type BucketEntry = {
+    entryId: string;
+    sessionId: string;
+    startMin: number;
+    endMin: number;
+    date: string;
+    startTime: string;
+    endTime: string;
+  };
 
-  // Rule 2: Lecturer double-booking — group by (lecturerId, timeSlotId)
-  const lecturerTimeKey = new Map<string, { entryIds: string[]; sessionIds: string[] }>();
-  for (const entry of entries) {
-    const session = sessionMap.get(entry.sessionId);
-    if (!session) continue;
-    for (const lecturerId of session.lecturerIds) {
-      const key = `${lecturerId}::${entry.timeSlotId}`;
-      const existing = lecturerTimeKey.get(key);
-      if (existing) {
-        if (!existing.entryIds.includes(entry.id)) existing.entryIds.push(entry.id);
-        if (!existing.sessionIds.includes(entry.sessionId)) existing.sessionIds.push(entry.sessionId);
-      } else {
-        lecturerTimeKey.set(key, { entryIds: [entry.id], sessionIds: [entry.sessionId] });
+  function emitPairConflicts(
+    buckets: Map<string, BucketEntry[]>,
+    scopeKind: 'room' | 'lecturer' | 'student_group',
+    buildMessage: (scopeId: string, date: string, startTime: string, endTime: string) => string,
+  ) {
+    for (const [bucketKey, bucketEntries] of buckets.entries()) {
+      const scopeId = bucketKey.split('::')[0]!;
+      bucketEntries.sort((a, b) => a.startMin - b.startMin);
+      for (let i = 0; i < bucketEntries.length - 1; i++) {
+        for (let j = i + 1; j < bucketEntries.length; j++) {
+          const a = bucketEntries[i]!;
+          const b = bucketEntries[j]!;
+          // b.startMin >= a.startMin (sorted); overlap iff a ends after b starts
+          if (a.endMin <= b.startMin) break; // sorted, so no later j will overlap either
+          const overlapStart = b.startTime;
+          const overlapEnd = a.endTime;
+          conflicts.push({
+            kind: scopeKind === 'room'
+              ? 'room_double_booking'
+              : scopeKind === 'lecturer'
+                ? 'lecturer_double_booking'
+                : 'student_group_double_booking',
+            message: buildMessage(scopeId, a.date, overlapStart, overlapEnd),
+            entryIds: [a.entryId, b.entryId],
+            involvedSessionIds: [...new Set([a.sessionId, b.sessionId])],
+            scope: { kind: scopeKind, id: scopeId },
+          });
+        }
       }
     }
   }
-  for (const [key, { entryIds, sessionIds }] of lecturerTimeKey.entries()) {
-    if (sessionIds.length > 1) {
-      const lecturerId = key.split('::')[0];
-      conflicts.push({
-        kind: 'lecturer_double_booking',
-        message: `Lecturer is scheduled in multiple sessions at the same time slot`,
-        entryIds,
-        involvedSessionIds: sessionIds,
-      });
-      void lecturerId;
-    }
-  }
 
-  // Rule 3: Student group double-booking — group by (studentGroupId, timeSlotId)
-  const sgTimeKey = new Map<string, { entryIds: string[]; sessionIds: string[] }>();
+  // Rule 1: Room double-booking — bucket by (roomId, date)
+  const roomBuckets = new Map<string, BucketEntry[]>();
+  for (const entry of entries) {
+    const ts = tsById.get(entry.timeSlotId);
+    if (!ts) continue;
+    const key = `${entry.roomId}::${ts.date}`;
+    const bucket = roomBuckets.get(key) ?? [];
+    bucket.push({
+      entryId: entry.id,
+      sessionId: entry.sessionId,
+      startMin: toMinutes(ts.startTime),
+      endMin: toMinutes(ts.endTime),
+      date: ts.date,
+      startTime: ts.startTime,
+      endTime: ts.endTime,
+    });
+    roomBuckets.set(key, bucket);
+  }
+  emitPairConflicts(roomBuckets, 'room', (roomId, date, startTime, endTime) => {
+    const name = resolveName?.('room', roomId) ?? roomId;
+    return `Room ${name} is double-booked on ${formatDateShort(date)} ${formatTimeRange(startTime, endTime)}`;
+  });
+
+  // Rule 2: Lecturer double-booking — bucket by (effectiveLecturerId, date)
+  // effectiveLecturerId = entry.assignedLecturerId ?? session.lecturerIds[0]
+  const lecturerBuckets = new Map<string, BucketEntry[]>();
   for (const entry of entries) {
     const session = sessionMap.get(entry.sessionId);
     if (!session) continue;
+    const ts = tsById.get(entry.timeSlotId);
+    if (!ts) continue;
+    const effectiveLecturerId = entry.assignedLecturerId ?? session.lecturerIds[0];
+    if (!effectiveLecturerId) continue;
+    const key = `${effectiveLecturerId}::${ts.date}`;
+    const bucket = lecturerBuckets.get(key) ?? [];
+    bucket.push({
+      entryId: entry.id,
+      sessionId: entry.sessionId,
+      startMin: toMinutes(ts.startTime),
+      endMin: toMinutes(ts.endTime),
+      date: ts.date,
+      startTime: ts.startTime,
+      endTime: ts.endTime,
+    });
+    lecturerBuckets.set(key, bucket);
+  }
+  emitPairConflicts(lecturerBuckets, 'lecturer', (lecturerId, date, startTime, endTime) => {
+    const name = resolveName?.('lecturer', lecturerId) ?? lecturerId;
+    return `Lecturer ${name} teaches two sessions on ${formatDateShort(date)} ${formatTimeRange(startTime, endTime)}`;
+  });
+
+  // Rule 3: Student group double-booking — bucket by (studentGroupId, date)
+  const sgBuckets = new Map<string, BucketEntry[]>();
+  for (const entry of entries) {
+    const session = sessionMap.get(entry.sessionId);
+    if (!session) continue;
+    const ts = tsById.get(entry.timeSlotId);
+    if (!ts) continue;
     for (const sgId of session.studentGroupIds) {
-      const key = `${sgId}::${entry.timeSlotId}`;
-      const existing = sgTimeKey.get(key);
-      if (existing) {
-        if (!existing.entryIds.includes(entry.id)) existing.entryIds.push(entry.id);
-        if (!existing.sessionIds.includes(entry.sessionId)) existing.sessionIds.push(entry.sessionId);
-      } else {
-        sgTimeKey.set(key, { entryIds: [entry.id], sessionIds: [entry.sessionId] });
-      }
-    }
-  }
-  for (const [key, { entryIds, sessionIds }] of sgTimeKey.entries()) {
-    if (sessionIds.length > 1) {
-      const sgId = key.split('::')[0];
-      conflicts.push({
-        kind: 'student_group_double_booking',
-        message: `Student group is scheduled in multiple sessions at the same time slot`,
-        entryIds,
-        involvedSessionIds: sessionIds,
+      const key = `${sgId}::${ts.date}`;
+      const bucket = sgBuckets.get(key) ?? [];
+      bucket.push({
+        entryId: entry.id,
+        sessionId: entry.sessionId,
+        startMin: toMinutes(ts.startTime),
+        endMin: toMinutes(ts.endTime),
+        date: ts.date,
+        startTime: ts.startTime,
+        endTime: ts.endTime,
       });
-      void sgId;
+      sgBuckets.set(key, bucket);
     }
   }
+  emitPairConflicts(sgBuckets, 'student_group', (sgId, date, startTime, endTime) => {
+    const name = resolveName?.('student_group', sgId) ?? sgId;
+    return `Student group ${name} has overlapping sessions on ${formatDateShort(date)} ${formatTimeRange(startTime, endTime)}`;
+  });
 
   // Rule 4: Room capacity — sum of student group sizes must not exceed room capacity
-  // Process per session (all entries for a session share the same room)
   const sessionEntryMap = new Map<string, string[]>();
   for (const entry of entries) {
     const existing = sessionEntryMap.get(entry.sessionId) ?? [];
@@ -144,10 +202,13 @@ export function detectConflicts(inputs: ConflictInputs): Conflict[] {
     }, 0);
 
     if (totalSize > room.capacity) {
+      const ts = tsById.get(entry.timeSlotId);
+      const timeInfo = ts ? ` on ${formatDateShort(ts.date)} ${formatTimeRange(ts.startTime, ts.endTime)}` : '';
+      const roomName = resolveName?.('room', entry.roomId) ?? room.roomType;
       const sessionEntries = sessionEntryMap.get(entry.sessionId) ?? [entry.id];
       conflicts.push({
         kind: 'room_capacity',
-        message: `Room capacity ${room.capacity} exceeded by ${totalSize - room.capacity} students (${totalSize} enrolled)`,
+        message: `Room ${roomName} capacity ${room.capacity} exceeded by ${totalSize - room.capacity} students (${totalSize} enrolled)${timeInfo}`,
         entryIds: sessionEntries,
         involvedSessionIds: [entry.sessionId],
       });
@@ -167,35 +228,42 @@ export function detectConflicts(inputs: ConflictInputs): Conflict[] {
     if (!session.requiredRoomType) continue;
 
     if (session.requiredRoomType !== room.roomType) {
+      const ts = tsById.get(entry.timeSlotId);
+      const timeInfo = ts ? ` on ${formatDateShort(ts.date)} ${formatTimeRange(ts.startTime, ts.endTime)}` : '';
+      const roomName = resolveName?.('room', entry.roomId) ?? room.roomType;
       const sessionEntries = sessionEntryMap.get(entry.sessionId) ?? [entry.id];
       conflicts.push({
         kind: 'room_type_mismatch',
-        message: `Session requires room type "${session.requiredRoomType}" but room has type "${room.roomType}"`,
+        message: `Room ${roomName} has type "${room.roomType}" but session requires "${session.requiredRoomType}"${timeInfo}`,
         entryIds: sessionEntries,
         involvedSessionIds: [entry.sessionId],
       });
     }
   }
 
-  // Rule 6: Lecturer unavailable
+  // Rule 6: Lecturer unavailable — only check the effective lecturer
   const checkedUnavailKeys = new Set<string>();
   for (const entry of entries) {
     const session = sessionMap.get(entry.sessionId);
     if (!session) continue;
-    for (const lecturerId of session.lecturerIds) {
-      const unavailKey = `${lecturerId}::${entry.sessionId}::${entry.timeSlotId}`;
-      if (checkedUnavailKeys.has(unavailKey)) continue;
-      checkedUnavailKeys.add(unavailKey);
+    const lecturerId = entry.assignedLecturerId ?? session.lecturerIds[0];
+    if (!lecturerId) continue;
+    const unavailKey = `${lecturerId}::${entry.sessionId}::${entry.timeSlotId}`;
+    if (checkedUnavailKeys.has(unavailKey)) continue;
+    checkedUnavailKeys.add(unavailKey);
 
-      const available = lecturerAvailability.get(lecturerId);
-      if (available && !available.has(entry.timeSlotId)) {
-        conflicts.push({
-          kind: 'lecturer_unavailable',
-          message: `Lecturer is not available at this time slot`,
-          entryIds: [entry.id],
-          involvedSessionIds: [entry.sessionId],
-        });
-      }
+    const available = lecturerAvailability.get(lecturerId);
+    if (available && !available.has(entry.timeSlotId)) {
+      const ts = tsById.get(entry.timeSlotId);
+      const timeInfo = ts ? ` on ${formatDateShort(ts.date)} ${formatTimeRange(ts.startTime, ts.endTime)}` : '';
+      const name = resolveName?.('lecturer', lecturerId) ?? lecturerId;
+      conflicts.push({
+        kind: 'lecturer_unavailable',
+        message: `Lecturer ${name} is not available${timeInfo}`,
+        entryIds: [entry.id],
+        involvedSessionIds: [entry.sessionId],
+        scope: { kind: 'lecturer', id: lecturerId },
+      });
     }
   }
 

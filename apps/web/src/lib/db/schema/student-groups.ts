@@ -1,4 +1,4 @@
-import { index, pgTable, integer, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { index, pgTable, integer, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 
 import { courses } from './courses';
 import { tenants } from './tenants';
@@ -13,6 +13,7 @@ export const studentGroups = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     year: integer('year'),
     size: integer('size').notNull(),
+    color: text('color'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -101,6 +101,26 @@ export default function SchedulesPage() {
     },
   });
 
+  const createEmptyMutation = api.schedules.createEmpty.useMutation({
+    onSuccess: (result) => {
+      utils.schedules.list.invalidate();
+      setGenerateDialogOpen(false);
+      setScheduleName('');
+      router.push(`/dashboard/schedules/${result.scheduleId}`);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Failed to create schedule',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  function handleStartEmpty() {
+    createEmptyMutation.mutate({ name: scheduleName.trim() || undefined });
+  }
+
   function handleGenerate() {
     generateMutation.mutate({
       name: scheduleName.trim() || undefined,
@@ -239,20 +259,32 @@ export default function SchedulesPage() {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
             <Button
               variant="outline"
               onClick={() => setGenerateDialogOpen(false)}
-              disabled={generateMutation.isPending}
+              disabled={generateMutation.isPending || createEmptyMutation.isPending}
             >
               Cancel
             </Button>
-            <Button onClick={handleGenerate} disabled={generateMutation.isPending}>
-              {generateMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Generate
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleStartEmpty}
+                disabled={generateMutation.isPending || createEmptyMutation.isPending}
+              >
+                {createEmptyMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Start empty (manual)
+              </Button>
+              <Button onClick={handleGenerate} disabled={generateMutation.isPending || createEmptyMutation.isPending}>
+                {generateMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Generate
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,4 @@
-import { index, integer, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { date, index, integer, pgEnum, pgTable, text, time, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { courseSessions } from './courses';
 import { rooms } from './rooms';
@@ -51,6 +51,9 @@ export const scheduleEntries = pgTable(
     timeSlotId: uuid('time_slot_id')
       .notNull()
       .references(() => timeSlots.id, { onDelete: 'cascade' }),
+    assignedLecturerId: uuid('assigned_lecturer_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -58,6 +61,29 @@ export const scheduleEntries = pgTable(
     sessionIdIdx: index('schedule_entries_session_id_idx').on(table.sessionId),
     roomIdIdx: index('schedule_entries_room_id_idx').on(table.roomId),
     timeSlotIdIdx: index('schedule_entries_ts_id_idx').on(table.timeSlotId),
+    assignedLecturerIdIdx: index('schedule_entries_assigned_lecturer_id_idx').on(
+      table.assignedLecturerId,
+    ),
+  }),
+);
+
+export const scheduleEvents = pgTable(
+  'schedule_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scheduleId: uuid('schedule_id')
+      .notNull()
+      .references(() => generatedSchedules.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    date: date('date').notNull(),
+    startTime: time('start_time').notNull(),
+    endTime: time('end_time').notNull(),
+    roomId: uuid('room_id').references(() => rooms.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    scheduleIdIdx: index('schedule_events_schedule_id_idx').on(table.scheduleId),
+    dateIdx: index('schedule_events_date_idx').on(table.date),
   }),
 );
 
