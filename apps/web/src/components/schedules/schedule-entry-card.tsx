@@ -52,6 +52,9 @@ export interface ScheduleEntryData {
   lecturerIds?: string[];
   courseId: string;
   studentGroupIds?: string[];
+  /** Hex color of the first attending student group, e.g. '#3B82F6'. When set,
+   *  overrides the session-type palette with a group-color fill + border. */
+  groupColor?: string | null;
 }
 
 interface ScheduleEntryCardProps {
@@ -63,16 +66,28 @@ interface ScheduleEntryCardProps {
 
 export function ScheduleEntryCard({ entry, onClick, conflicted, conflictMessages }: ScheduleEntryCardProps) {
   const style = sessionTypeStyles[entry.sessionType];
+  const { groupColor } = entry;
+
+  // When a group color is present, override the palette with an inline style.
+  // backgroundColor = hex + '33' gives 20% alpha fill; borderColor = full hex.
+  // The conflicted state takes priority for the border (border-destructive class).
+  const groupColorStyle =
+    groupColor && !conflicted
+      ? { backgroundColor: groupColor + '33', borderColor: groupColor }
+      : groupColor && conflicted
+        ? { backgroundColor: groupColor + '33' } // keep fill, but let border-destructive win
+        : undefined;
 
   const button = (
     <button
       type="button"
       onClick={() => onClick(entry)}
+      style={groupColorStyle}
       className={cn(
         'w-full rounded-md border p-2 text-left transition-shadow hover:shadow-md cursor-pointer',
-        style.bg,
-        style.text,
-        conflicted ? 'border-2 border-destructive' : style.border,
+        // When groupColor is set the bg is supplied via inline style; only keep text + border classes
+        groupColor ? style.text : cn(style.bg, style.text),
+        conflicted ? 'border-2 border-destructive' : groupColor ? '' : style.border,
       )}
     >
       <p className="text-xs font-bold truncate">{entry.courseCode}</p>

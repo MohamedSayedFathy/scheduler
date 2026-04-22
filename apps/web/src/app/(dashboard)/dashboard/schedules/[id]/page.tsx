@@ -170,6 +170,7 @@ export default function ScheduleDetailPage() {
         lecturerName,
         lecturerIds: lecturers.map((l) => l.lecturerId),
         studentGroupIds,
+        groupColor: e.groupColor ?? undefined,
       };
     });
   }, [schedule?.entries, courseMap, lecturersBySessionMap, studentGroupsByCourseMap]);
@@ -405,6 +406,7 @@ export default function ScheduleDetailPage() {
     moveEntry.mutate({
       scheduleId,
       sessionId,
+      currentTimeSlotId: pendingDrop.entry.timeSlotId,
       newStartTimeSlotId: targetSlot.timeSlotId,
       applyToAllWeeks,
     });
