@@ -86,3 +86,7 @@ drizzle/migrations/meta/_journal.json.bak
 
 # OS
 Desktop.ini
+
+# Claude Code local agent state (not shared across machines)
+.claude/agent-memory/
+apps/web/.claude/

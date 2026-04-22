@@ -117,12 +117,11 @@ def _partition_by_week(
 def solve(request: SolveRequest) -> SolveResult:
     """Run the CP-SAT solver on the scheduling problem.
 
-    If the problem can be partitioned into independent weekly sub-problems,
-    each week is solved separately for dramatically better performance.
+    If the problem can be partitioned into weekly sub-problems, only the
+    first week is solved and its assignment is replicated across all weeks.
     """
     start_time = time.monotonic()
 
-    # Partition into weekly sub-problems
     sub_requests = _partition_by_week(request)
 
     if len(sub_requests) > 1:
@@ -131,110 +130,124 @@ def solve(request: SolveRequest) -> SolveResult:
             num_weeks=len(sub_requests),
             sessions_per_week=[len(sr.sessions) for sr in sub_requests],
         )
-        return _solve_partitioned(request, sub_requests, start_time)
+        return _solve_replicated(request, sub_requests, start_time)
 
-    # Single problem (no partitioning possible)
     return _solve_single(request, start_time)
 
 
-def _solve_partitioned(
+def _solve_replicated(
     original_request: SolveRequest,
     sub_requests: list[SolveRequest],
     start_time: float,
 ) -> SolveResult:
-    """Solve each weekly sub-problem independently and merge results."""
-    all_entries: list[ScheduleEntry] = []
-    all_conflicts: list[Conflict] = []
-    total_branches = 0
-    total_conflicts_count = 0
-    worst_status = SolverStatus.OPTIMAL
+    """Solve only the first week, then replicate the schedule to all other weeks.
 
-    # Per-week timeout: each weekly sub-problem is ~17x smaller than the original,
-    # so it should solve much faster. Allow 30s per week.
-    per_week_timeout = 30
+    Sessions across weeks are matched by position (sub_requests preserve insertion
+    order from the web layer). Time slots are matched across weeks by
+    (day_of_week, start_time, end_time). Rooms and lecturers transfer as-is.
+    """
+    template_sub = sub_requests[0]
+    template_sub.solver_config.timeout_seconds = max(
+        template_sub.solver_config.timeout_seconds, 60
+    )
 
-    for i, sub_req in enumerate(sub_requests):
-        week_start = time.monotonic()
-        logger.info(
-            "solving_week",
-            week=i + 1,
-            total_weeks=len(sub_requests),
-            num_sessions=len(sub_req.sessions),
-            num_time_slots=len(sub_req.time_slots),
-            timeout=per_week_timeout,
-        )
+    logger.info(
+        "solving_template_week",
+        num_sessions=len(template_sub.sessions),
+        num_time_slots=len(template_sub.time_slots),
+        timeout=template_sub.solver_config.timeout_seconds,
+    )
 
-        # Override timeout for this sub-problem
-        sub_req.solver_config.timeout_seconds = per_week_timeout
+    template_result = _solve_single(template_sub, time.monotonic())
 
-        result = _solve_single(sub_req, week_start)
+    logger.info(
+        "template_week_solved",
+        status=template_result.status.value,
+        num_entries=len(template_result.entries),
+    )
 
-        logger.info(
-            "week_solved",
-            week=i + 1,
-            status=result.status.value,
-            num_entries=len(result.entries),
-            wall_time=round(time.monotonic() - week_start, 2),
-        )
-
-        if result.status == SolveResultStatus.SOLVED:
-            all_entries.extend(result.entries)
-            if result.stats:
-                total_branches += result.stats.num_branches or 0
-                total_conflicts_count += result.stats.num_conflicts or 0
-                if result.stats.status.value > worst_status.value:
-                    worst_status = result.stats.status
-        elif result.status == SolveResultStatus.INFEASIBLE:
-            all_conflicts.extend(result.conflicts or [])
-            all_conflicts.append(Conflict(
-                constraint_type=ConstraintType.ROOM_CAPACITY,
-                message=f"Week {i + 1} is infeasible.",
-            ))
-            # Continue solving other weeks
-            worst_status = SolverStatus.INFEASIBLE
-        else:
-            # Timeout or failure
-            if worst_status != SolverStatus.INFEASIBLE:
-                worst_status = SolverStatus.UNKNOWN
-
-    wall_time = time.monotonic() - start_time
-
-    if all_entries:
+    if template_result.status != SolveResultStatus.SOLVED:
+        wall_time = time.monotonic() - start_time
         return SolveResult(
             job_id="",
             tenant_id=original_request.tenant_id,
             schedule_id=original_request.schedule_id,
-            status=SolveResultStatus.SOLVED,
-            entries=all_entries,
-            conflicts=all_conflicts,
+            status=template_result.status,
+            entries=[],
+            conflicts=template_result.conflicts,
             stats=SolverStats(
-                status=worst_status,
+                status=template_result.stats.status if template_result.stats else SolverStatus.UNKNOWN,
                 wall_time_seconds=round(wall_time, 3),
-                num_branches=total_branches,
-                num_conflicts=total_conflicts_count,
             ),
+            error_message=template_result.error_message or "Template week failed to solve.",
         )
 
-    # All weeks failed
-    result_status = (
-        SolveResultStatus.INFEASIBLE
-        if worst_status == SolverStatus.INFEASIBLE
-        else SolveResultStatus.TIMEOUT
-        if worst_status == SolverStatus.UNKNOWN
-        else SolveResultStatus.FAILED
+    template_ts_by_id = {ts.id: ts for ts in template_sub.time_slots}
+    template_entry_by_session_id = {e.session_id: e for e in template_result.entries}
+
+    all_entries: list[ScheduleEntry] = list(template_result.entries)
+    replicated_count = 0
+    skipped_count = 0
+
+    for sub in sub_requests[1:]:
+        ts_by_day_time: dict[tuple[str, str, str], str] = {
+            (ts.day_of_week.value, ts.start_time, ts.end_time): ts.id
+            for ts in sub.time_slots
+        }
+
+        for week_session, template_session in zip(sub.sessions, template_sub.sessions):
+            template_entry = template_entry_by_session_id.get(template_session.id)
+            if template_entry is None:
+                skipped_count += 1
+                continue
+
+            new_ts_ids: list[str] = []
+            for ts_id in template_entry.time_slot_ids:
+                template_ts = template_ts_by_id.get(ts_id)
+                if template_ts is None:
+                    continue
+                key = (template_ts.day_of_week.value, template_ts.start_time, template_ts.end_time)
+                mapped = ts_by_day_time.get(key)
+                if mapped is not None:
+                    new_ts_ids.append(mapped)
+
+            if not new_ts_ids:
+                skipped_count += 1
+                continue
+
+            all_entries.append(ScheduleEntry(
+                session_id=week_session.id,
+                room_id=template_entry.room_id,
+                time_slot_ids=new_ts_ids,
+                assigned_lecturer_id=template_entry.assigned_lecturer_id,
+            ))
+            replicated_count += 1
+
+    wall_time = time.monotonic() - start_time
+    logger.info(
+        "replicated_to_other_weeks",
+        template_entries=len(template_result.entries),
+        replicated_entries=replicated_count,
+        skipped=skipped_count,
+        total_entries=len(all_entries),
+        wall_time=round(wall_time, 2),
     )
 
     return SolveResult(
         job_id="",
         tenant_id=original_request.tenant_id,
         schedule_id=original_request.schedule_id,
-        status=result_status,
-        conflicts=all_conflicts if all_conflicts else None,
+        status=SolveResultStatus.SOLVED,
+        entries=all_entries,
+        conflicts=[],
         stats=SolverStats(
-            status=worst_status,
+            status=template_result.stats.status if template_result.stats else SolverStatus.OPTIMAL,
             wall_time_seconds=round(wall_time, 3),
+            objective_value=template_result.stats.objective_value if template_result.stats else None,
+            num_branches=template_result.stats.num_branches if template_result.stats else 0,
+            num_conflicts=template_result.stats.num_conflicts if template_result.stats else 0,
+            soft_constraint_scores=template_result.stats.soft_constraint_scores if template_result.stats else {},
         ),
-        error_message=f"All {len(sub_requests)} weeks failed to solve.",
     )
 
 
