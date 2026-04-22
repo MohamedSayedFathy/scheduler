@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -64,7 +66,6 @@ const sessionTypeLabels: Record<string, string> = {
 };
 
 function formatTime(time: string): string {
-  // Handle both "HH:MM" and "HH:MM:SS" formats
   return time.slice(0, 5);
 }
 
@@ -81,14 +82,19 @@ export function EntryDetailDialog({
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined);
   const [selectedTimeSlotId, setSelectedTimeSlotId] = useState<string | undefined>(undefined);
+  const [applyToAllWeeks, setApplyToAllWeeks] = useState(true);
 
-  const updateEntry = api.schedules.updateEntry.useMutation({
+  const moveEntry = api.schedules.moveEntry.useMutation({
     onSuccess: () => {
-      toast({ title: 'Entry updated', description: 'The schedule entry has been reassigned.' });
+      toast({
+        title: 'Entry updated',
+        description: applyToAllWeeks
+          ? 'The session has been reassigned across all weeks.'
+          : 'The schedule entry has been reassigned for this week.',
+      });
       utils.schedules.getById.invalidate({ id: scheduleId });
       onOpenChange(false);
-      setSelectedRoomId(undefined);
-      setSelectedTimeSlotId(undefined);
+      resetForm();
     },
     onError: (error) => {
       toast({
@@ -99,31 +105,34 @@ export function EntryDetailDialog({
     },
   });
 
+  function resetForm() {
+    setSelectedRoomId(undefined);
+    setSelectedTimeSlotId(undefined);
+    setApplyToAllWeeks(true);
+  }
+
   if (!entry) return null;
 
+  const currentEntry = entry;
+  const effectiveRoomId = selectedRoomId ?? currentEntry.roomId;
+  const effectiveTimeSlotId = selectedTimeSlotId ?? currentEntry.timeSlotId;
+
   const hasChanges =
-    (selectedRoomId && selectedRoomId !== entry.roomId) ||
-    (selectedTimeSlotId && selectedTimeSlotId !== entry.timeSlotId);
+    (selectedRoomId && selectedRoomId !== currentEntry.roomId) ||
+    (selectedTimeSlotId && selectedTimeSlotId !== currentEntry.timeSlotId);
 
   function handleSave() {
-    if (!entry) return;
-
-    const updates: { entryId: string; roomId?: string; timeSlotId?: string } = {
-      entryId: entry.entryId,
-    };
-
-    if (selectedRoomId && selectedRoomId !== entry.roomId) {
-      updates.roomId = selectedRoomId;
-    }
-    if (selectedTimeSlotId && selectedTimeSlotId !== entry.timeSlotId) {
-      updates.timeSlotId = selectedTimeSlotId;
-    }
-
-    updateEntry.mutate(updates);
+    moveEntry.mutate({
+      scheduleId,
+      sessionId: currentEntry.sessionId,
+      newRoomId: selectedRoomId && selectedRoomId !== currentEntry.roomId ? selectedRoomId : undefined,
+      newStartTimeSlotId: selectedTimeSlotId && selectedTimeSlotId !== currentEntry.timeSlotId ? selectedTimeSlotId : undefined,
+      applyToAllWeeks,
+    });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) resetForm(); onOpenChange(o); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
@@ -169,7 +178,7 @@ export function EntryDetailDialog({
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Room</label>
               <Select
-                value={selectedRoomId ?? entry.roomId}
+                value={effectiveRoomId}
                 onValueChange={setSelectedRoomId}
               >
                 <SelectTrigger>
@@ -188,7 +197,7 @@ export function EntryDetailDialog({
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Time Slot</label>
               <Select
-                value={selectedTimeSlotId ?? entry.timeSlotId}
+                value={effectiveTimeSlotId}
                 onValueChange={setSelectedTimeSlotId}
               >
                 <SelectTrigger>
@@ -203,12 +212,24 @@ export function EntryDetailDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="apply-all-weeks"
+                checked={applyToAllWeeks}
+                onCheckedChange={(checked) => setApplyToAllWeeks(checked === true)}
+              />
+              <Label htmlFor="apply-all-weeks" className="text-sm cursor-pointer">
+                Apply to all 17 weeks
+              </Label>
+            </div>
+
             <Button
               onClick={handleSave}
-              disabled={!hasChanges || updateEntry.isPending}
+              disabled={!hasChanges || moveEntry.isPending}
               className="w-full"
             >
-              {updateEntry.isPending && (
+              {moveEntry.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Save Changes

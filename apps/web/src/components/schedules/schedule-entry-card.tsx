@@ -34,6 +34,8 @@ const sessionTypeLabels: Record<SessionType, string> = {
 
 export interface ScheduleEntryData {
   entryId: string;
+  /** The courseSessions.id that this entry belongs to */
+  sessionId: string;
   courseCode: string;
   courseName: string;
   sessionType: SessionType;
