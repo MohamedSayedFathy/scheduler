@@ -154,6 +154,7 @@ export default function ScheduleDetailPage() {
       const studentGroupIds = studentGroupsByCourseMap.get(e.session.courseId) ?? [];
       return {
         entryId: e.entry.id,
+        sessionId: e.session.id,
         courseCode: courseInfo?.code ?? 'Unknown',
         courseName: courseInfo?.name ?? 'Unknown Course',
         courseId: courseInfo?.id ?? e.session.courseId,
@@ -211,7 +212,7 @@ export default function ScheduleDetailPage() {
     const sgList = studentGroups?.map((sg) => ({ id: sg.id, size: sg.size })) ?? [];
 
     return detectConflicts({
-      entries: entryData.map((e) => ({ id: e.entryId, sessionId: e.courseId, roomId: e.roomId, timeSlotId: e.timeSlotId })),
+      entries: entryData.map((e) => ({ id: e.entryId, sessionId: e.sessionId, roomId: e.roomId, timeSlotId: e.timeSlotId })),
       sessions: conflictInputSessions,
       rooms: roomList,
       timeSlots: tsList,
@@ -338,16 +339,14 @@ export default function ScheduleDetailPage() {
 
     // Compute what the hypothetical new entry set would look like
     // (replace all entries for this session with the new time slot)
-    const sessionId = getSessionIdForEntry(entry, schedule?.entries ?? []);
-    if (!sessionId) return;
+    const sessionId = getSessionIdForEntry(entry);
 
     const targetTimeSlotId = targetSlot?.timeSlotId;
     if (!targetTimeSlotId) return; // Cell not covered by any slot — cancel drop
 
     // Build hypothetical new entries for the current week
     const hypotheticalEntries = weekFilteredEntries.map((e) => {
-      const eSessionId = getSessionIdForEntry(e, schedule?.entries ?? []);
-      if (eSessionId === sessionId) {
+      if (getSessionIdForEntry(e) === sessionId) {
         return { ...e, timeSlotId: targetTimeSlotId, dayOfWeek: targetDayOfWeek, startTime: targetStartTime };
       }
       return e;
@@ -363,7 +362,7 @@ export default function ScheduleDetailPage() {
     const newConflicts = detectConflicts({
       entries: hypotheticalEntries.map((e) => ({
         id: e.entryId,
-        sessionId: getSessionIdForEntry(e, schedule?.entries ?? []) ?? e.entryId,
+        sessionId: getSessionIdForEntry(e),
         roomId: e.roomId,
         timeSlotId: e.timeSlotId,
       })),
@@ -387,18 +386,13 @@ export default function ScheduleDetailPage() {
     }
   }
 
-  function getSessionIdForEntry(
-    entry: ScheduleEntryData,
-    rawEntries: Array<{ entry: { id: string }; session: { id: string } }>,
-  ): string | null {
-    const found = rawEntries.find((e) => e.entry.id === entry.entryId);
-    return found?.session.id ?? null;
+  function getSessionIdForEntry(entry: ScheduleEntryData): string {
+    return entry.sessionId;
   }
 
   function executeMoveEntry(applyToAllWeeks: boolean) {
     if (!pendingDrop) return;
-    const sessionId = getSessionIdForEntry(pendingDrop.entry, schedule?.entries ?? []);
-    if (!sessionId) return;
+    const sessionId = getSessionIdForEntry(pendingDrop.entry);
 
     // Find the matching time slot id for the target
     const targetSlot = weekFilteredEntries.find(
