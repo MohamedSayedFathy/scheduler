@@ -1,9 +1,10 @@
-import { index, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { courseSessions } from './courses';
 import { rooms } from './rooms';
 import { tenants } from './tenants';
 import { timeSlots } from './time-slots';
+import { users } from './users';
 
 export const scheduleStatusEnum = pgEnum('schedule_status', [
   'pending',
@@ -57,5 +58,27 @@ export const scheduleEntries = pgTable(
     sessionIdIdx: index('schedule_entries_session_id_idx').on(table.sessionId),
     roomIdIdx: index('schedule_entries_room_id_idx').on(table.roomId),
     timeSlotIdIdx: index('schedule_entries_ts_id_idx').on(table.timeSlotId),
+  }),
+);
+
+export const scheduleVersions = pgTable(
+  'schedule_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scheduleId: uuid('schedule_id')
+      .notNull()
+      .references(() => generatedSchedules.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    entriesSnapshot: text('entries_snapshot').notNull(),
+    conflictCount: integer('conflict_count').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    scheduleIdIdx: index('schedule_versions_schedule_id_idx').on(table.scheduleId),
+    tenantIdIdx: index('schedule_versions_tenant_id_idx').on(table.tenantId),
   }),
 );
