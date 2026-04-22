@@ -1,16 +1,16 @@
 /**
- * Seed script — populates the database with a large, realistic university dataset.
+ * Seed script — populates the database with the real TUM university dataset.
  *
  * Usage:
  *   cd apps/web
  *   npx dotenv-cli -e .env.local -- npx tsx scripts/seed.ts
  *
  * Dataset size:
- *   - 50 lecturers
- *   - 70 courses across 10 departments (~150+ sessions)
- *   - 12 student groups (4 years × 3 groups)
- *   - 19 rooms
- *   - ~17 weeks of time slots (2026-04-13 → 2026-08-07), Mon-Fri 08:00-18:00
+ *   - 21 lecturers (extracted from timetable photos)
+ *   - ~45 courses across Informatics (Sem 2/4/6) and Management
+ *   - 4 student groups with fixed colors
+ *   - 13 rooms
+ *   - ~17 weeks of time slots (2026-04-13 → 2026-08-07), Mon-Fri, 6 × 1.5h slots
  *   - Lecturer day/date exceptions
  *   - Default scheduling constraints
  */
@@ -73,135 +73,75 @@ function pick<T>(arr: T[], index: number): T {
 // ── Seed data definitions ───────────────────────────────────────────
 
 /**
- * 50 lecturers — diverse, international names.
- * Assigned to departments in blocks of 5 (10 departments × 5 lecturers each).
- * Block 0  (idx 0-4)  → Computer Science
- * Block 1  (idx 5-9)  → Mathematics
- * Block 2  (idx 10-14)→ Physics
- * Block 3  (idx 15-19)→ Chemistry
- * Block 4  (idx 20-24)→ Biology
- * Block 5  (idx 25-29)→ Engineering
- * Block 6  (idx 30-34)→ Economics
- * Block 7  (idx 35-39)→ Business
- * Block 8  (idx 40-44)→ Literature
- * Block 9  (idx 45-49)→ Psychology
+ * 21 lecturers extracted from the timetable photos.
+ * Email = {surname-lowercase}@tum.de, clerkUserId = '' (seeded placeholder).
  */
 const LECTURERS = [
-  // CS (0-4)
-  { firstName: 'Ahmed', lastName: 'Hassan' },
-  { firstName: 'Mei', lastName: 'Lin' },
-  { firstName: 'Dmitri', lastName: 'Volkov' },
-  { firstName: 'Amara', lastName: 'Diallo' },
-  { firstName: 'Lucas', lastName: 'Ferreira' },
-  // Math (5-9)
-  { firstName: 'Fatima', lastName: 'Al-Rashid' },
-  { firstName: 'Hiroshi', lastName: 'Tanaka' },
-  { firstName: 'Ingrid', lastName: 'Lindqvist' },
-  { firstName: 'Kofi', lastName: 'Mensah' },
-  { firstName: 'Priya', lastName: 'Nair' },
-  // Physics (10-14)
-  { firstName: 'Omar', lastName: 'Khalil' },
-  { firstName: 'Sophia', lastName: 'Bauer' },
-  { firstName: 'Rafael', lastName: 'Morales' },
-  { firstName: 'Yuki', lastName: 'Nakamura' },
-  { firstName: 'Chidinma', lastName: 'Okafor' },
-  // Chemistry (15-19)
-  { firstName: 'Sara', lastName: 'Mahmoud' },
-  { firstName: 'Piotr', lastName: 'Kowalski' },
-  { firstName: 'Aisha', lastName: 'Mwangi' },
-  { firstName: 'Ethan', lastName: 'Novak' },
-  { firstName: 'Lin', lastName: 'Wei' },
-  // Biology (20-24)
-  { firstName: 'Youssef', lastName: 'Ibrahim' },
-  { firstName: 'Elena', lastName: 'Sokolova' },
-  { firstName: 'Tariq', lastName: 'Al-Amin' },
-  { firstName: 'Beatriz', lastName: 'Santos' },
-  { firstName: 'Jae-Won', lastName: 'Kim' },
-  // Engineering (25-29)
-  { firstName: 'Nour', lastName: 'Abdel-Fattah' },
-  { firstName: 'Viktor', lastName: 'Petrov' },
-  { firstName: 'Adaeze', lastName: 'Nwosu' },
-  { firstName: 'Sebastián', lastName: 'Castro' },
-  { firstName: 'Haruto', lastName: 'Yamamoto' },
-  // Economics (30-34)
-  { firstName: 'Khaled', lastName: 'Mostafa' },
-  { firstName: 'Anna', lastName: 'Bergström' },
-  { firstName: 'Obinna', lastName: 'Eze' },
-  { firstName: 'Clara', lastName: 'Dupont' },
-  { firstName: 'Arjun', lastName: 'Sharma' },
-  // Business (35-39)
-  { firstName: 'Layla', lastName: 'Zaki' },
-  { firstName: 'Tomás', lastName: 'García' },
-  { firstName: 'Nkechi', lastName: 'Adeyemi' },
-  { firstName: 'Olga', lastName: 'Morozova' },
-  { firstName: 'Wei', lastName: 'Zhang' },
-  // Literature (40-44)
-  { firstName: 'Tarek', lastName: 'Sameer' },
-  { firstName: 'Maeve', lastName: 'O\'Sullivan' },
-  { firstName: 'Ravi', lastName: 'Krishnan' },
-  { firstName: 'Amelia', lastName: 'Fischer' },
-  { firstName: 'Zara', lastName: 'Al-Faris' },
-  // Psychology (45-49)
-  { firstName: 'Hana', lastName: 'El-Sayed' },
-  { firstName: 'Luca', lastName: 'Romano' },
-  { firstName: 'Yewande', lastName: 'Adebayo' },
-  { firstName: 'Sven', lastName: 'Eriksson' },
-  { firstName: 'Meera', lastName: 'Pillai' },
+  { firstName: 'Wuttke',       lastName: 'Wuttke' },
+  { firstName: 'Kobourov',     lastName: 'Kobourov' },
+  { firstName: 'Chen',         lastName: 'Chen' },
+  { firstName: 'Wagner',       lastName: 'Wagner' },
+  { firstName: 'Acosta',       lastName: 'Acosta' },
+  { firstName: 'Pufahl',       lastName: 'Pufahl' },
+  { firstName: 'Müller',       lastName: 'Müller' },
+  { firstName: 'Anzt',         lastName: 'Anzt' },
+  { firstName: 'Meißner',      lastName: 'Meißner' },
+  { firstName: 'Amr',          lastName: 'Amr' },
+  { firstName: 'Günther',      lastName: 'Günther' },
+  { firstName: 'Trinitis',     lastName: 'Trinitis' },
+  { firstName: 'Luttenberger', lastName: 'Luttenberger' },
+  { firstName: 'Sunyaev',      lastName: 'Sunyaev' },
+  { firstName: 'Fraser',       lastName: 'Fraser' },
+  { firstName: 'Tasch',        lastName: 'Tasch' },
+  { firstName: 'Volkmer',      lastName: 'Volkmer' },
+  { firstName: 'Li',           lastName: 'Li' },
+  { firstName: 'Stich',        lastName: 'Stich' },
+  { firstName: 'Samira',       lastName: 'Samira' },
+  { firstName: 'Kerstin',      lastName: 'Kerstin' },
 ];
 
-// ── Rooms (19) ────────────────────────────────────────────────────────
+// Lookup map: surname → index in LECTURERS
+const L: Record<string, number> = {};
+LECTURERS.forEach((l, i) => { L[l.lastName] = i; });
+
+// ── Rooms (13) ────────────────────────────────────────────────────────
 const ROOMS_DATA = [
   // Lecture halls
-  { name: 'Hall A-101', building: 'Building A', capacity: 300, roomType: 'lecture_hall' as const, equipment: ['projector', 'microphone', 'whiteboard'] },
-  { name: 'Hall A-102', building: 'Building A', capacity: 250, roomType: 'lecture_hall' as const, equipment: ['projector', 'microphone'] },
-  { name: 'Hall B-201', building: 'Building B', capacity: 200, roomType: 'lecture_hall' as const, equipment: ['projector', 'whiteboard'] },
-  { name: 'Hall C-101', building: 'Building C', capacity: 180, roomType: 'lecture_hall' as const, equipment: ['projector', 'microphone', 'whiteboard'] },
-  { name: 'Hall D-101', building: 'Building D', capacity: 150, roomType: 'lecture_hall' as const, equipment: ['projector', 'microphone'] },
-  { name: 'Hall E-201', building: 'Building E', capacity: 120, roomType: 'lecture_hall' as const, equipment: ['projector', 'whiteboard'] },
+  { name: 'D.2.01',            building: 'Main',        capacity: 200, roomType: 'lecture_hall'  as const, equipment: ['projector', 'microphone', 'whiteboard'] },
+  { name: 'D.2.11',            building: 'Main',        capacity: 200, roomType: 'lecture_hall'  as const, equipment: ['projector', 'microphone', 'whiteboard'] },
+  { name: 'L.0.13',            building: 'Main',        capacity: 200, roomType: 'lecture_hall'  as const, equipment: ['projector', 'microphone'] },
+  { name: 'C.0.50',            building: 'Main',        capacity: 200, roomType: 'lecture_hall'  as const, equipment: ['projector', 'microphone', 'whiteboard'] },
+  { name: 'Weipertstr. C.0.50',building: 'Main',        capacity: 200, roomType: 'lecture_hall'  as const, equipment: ['projector', 'microphone'] },
   // Tutorial rooms
-  { name: 'Room A-201', building: 'Building A', capacity: 60, roomType: 'tutorial_room' as const, equipment: ['projector', 'whiteboard'] },
-  { name: 'Room A-202', building: 'Building A', capacity: 50, roomType: 'tutorial_room' as const, equipment: ['projector', 'whiteboard'] },
-  { name: 'Room B-101', building: 'Building B', capacity: 55, roomType: 'tutorial_room' as const, equipment: ['projector', 'whiteboard'] },
-  { name: 'Room B-102', building: 'Building B', capacity: 40, roomType: 'tutorial_room' as const, equipment: ['whiteboard'] },
-  { name: 'Room C-201', building: 'Building C', capacity: 45, roomType: 'tutorial_room' as const, equipment: ['projector', 'whiteboard'] },
-  { name: 'Room C-202', building: 'Building C', capacity: 35, roomType: 'tutorial_room' as const, equipment: ['whiteboard'] },
-  // Labs
-  { name: 'Lab A-301', building: 'Building A', capacity: 40, roomType: 'lab' as const, equipment: ['lab_equipment', 'projector'] },
-  { name: 'Lab B-301', building: 'Building B', capacity: 35, roomType: 'lab' as const, equipment: ['lab_equipment', 'projector', 'whiteboard'] },
-  { name: 'Lab C-301', building: 'Building C', capacity: 30, roomType: 'lab' as const, equipment: ['lab_equipment'] },
-  // Computer labs
-  { name: 'CompLab A-401', building: 'Building A', capacity: 40, roomType: 'computer_lab' as const, equipment: ['computers', 'projector', 'whiteboard'] },
-  { name: 'CompLab B-401', building: 'Building B', capacity: 35, roomType: 'computer_lab' as const, equipment: ['computers', 'projector'] },
+  { name: 'B.0.22',            building: 'Main',        capacity: 200, roomType: 'tutorial_room' as const, equipment: ['projector', 'whiteboard'] },
+  { name: 'B.0.23',            building: 'Main',        capacity: 200, roomType: 'tutorial_room' as const, equipment: ['projector', 'whiteboard'] },
+  { name: 'B.0.43',            building: 'Main',        capacity: 200, roomType: 'tutorial_room' as const, equipment: ['whiteboard'] },
+  { name: 'B.0.44',            building: 'Main',        capacity: 200, roomType: 'tutorial_room' as const, equipment: ['whiteboard'] },
+  { name: 'Weipertstr. B.0.22',building: 'Main',        capacity: 200, roomType: 'tutorial_room' as const, equipment: ['projector', 'whiteboard'] },
+  { name: 'C.0.45',            building: 'Main',        capacity: 200, roomType: 'tutorial_room' as const, equipment: ['projector', 'whiteboard'] },
   // Seminar rooms
-  { name: 'Seminar D-101', building: 'Building D', capacity: 30, roomType: 'seminar_room' as const, equipment: ['projector', 'whiteboard'] },
-  { name: 'Seminar D-102', building: 'Building D', capacity: 25, roomType: 'seminar_room' as const, equipment: ['projector'] },
+  { name: 'Etzelstraße 1',     building: 'Etzelstraße', capacity: 200, roomType: 'seminar_room'  as const, equipment: ['projector', 'whiteboard'] },
+  { name: 'Etzelstraße 2',     building: 'Etzelstraße', capacity: 200, roomType: 'seminar_room'  as const, equipment: ['projector', 'whiteboard'] },
 ];
 
-// ── Student groups (12): 4 years × 3 groups ───────────────────────────
-// Indices 0-2  → Year 1 (A, B, C)
-// Indices 3-5  → Year 2 (A, B, C)
-// Indices 6-8  → Year 3 (A, B, C)
-// Indices 9-11 → Year 4 (A, B, C)
+// ── Student groups (4) ─────────────────────────────────────────────────
 const STUDENT_GROUPS_DATA = [
-  { name: 'Year 1 - Group A', year: 1, size: 45 },
-  { name: 'Year 1 - Group B', year: 1, size: 42 },
-  { name: 'Year 1 - Group C', year: 1, size: 38 },
-  { name: 'Year 2 - Group A', year: 2, size: 37 },
-  { name: 'Year 2 - Group B', year: 2, size: 35 },
-  { name: 'Year 2 - Group C', year: 2, size: 32 },
-  { name: 'Year 3 - Group A', year: 3, size: 30 },
-  { name: 'Year 3 - Group B', year: 3, size: 28 },
-  { name: 'Year 3 - Group C', year: 3, size: 26 },
-  { name: 'Year 4 - Group A', year: 4, size: 24 },
-  { name: 'Year 4 - Group B', year: 4, size: 22 },
-  { name: 'Year 4 - Group C', year: 4, size: 20 },
+  { name: 'Sem 2 Informatics', year: 2, size: 60, color: '#3B82F6' },
+  { name: 'Sem 4 Informatics', year: 4, size: 50, color: '#22C55E' },
+  { name: 'Sem 6 Informatics', year: 6, size: 40, color: '#F97316' },
+  { name: 'Management (MGT)',  year: 2, size: 40, color: '#1F2937' },
 ];
 
-// ── Courses (70) ───────────────────────────────────────────────────────
-// sessionDef: { type, duration (slots), freq (per week) }
-// lecturerBlock: which block of 5 lecturers owns this dept (0-9)
-// yearGroups: which year-group indices (0-11) are enrolled
-// extraGroups: additional group indices for cross-year courses (optional)
+// Group index constants for readability
+const GRP_SEM2 = 0; // Sem 2 Informatics – blue
+const GRP_SEM4 = 1; // Sem 4 Informatics – green
+const GRP_SEM6 = 2; // Sem 6 Informatics – orange
+const GRP_MGT  = 3; // Management – black
+
+// ── Courses (~45) ─────────────────────────────────────────────────────
+// lecturerIndices: indices into LECTURERS array (all of them teach this course at session level)
+// lecturerIndices[0] is the primary (used as course coordinator in courseLecturers)
+// yearGroups: which student group indices attend this course
 
 type SessionDef = { type: 'lecture' | 'tutorial' | 'lab'; duration: number; freq: number };
 type CourseDef = {
@@ -209,171 +149,547 @@ type CourseDef = {
   name: string;
   department: string;
   credits: number;
-  lecturerBlock: number; // which block of 5 lecturers (0-9) teaches this
-  yearGroups: number[];  // student group indices assigned to this course
+  lecturerIndices: number[];
+  yearGroups: number[];
   sessions: SessionDef[];
 };
 
 const COURSES_DATA: CourseDef[] = [
-  // ── Computer Science (lecturerBlock 0, lecturers idx 0-4) ──────────
-  // Each course assigned to exactly 1 group, round-robin within year level.
-  // Y1=[0,1,2], Y2=[3,4,5], Y3=[6,7,8], Y4=[9,10,11]. ~5-6 courses per group.
-  { code: 'CS101', name: 'Introduction to Computer Science', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [0],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'CS102', name: 'Programming Fundamentals', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [1],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'CS103', name: 'Discrete Mathematics for CS', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [2],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'CS201', name: 'Data Structures & Algorithms', department: 'Computer Science', credits: 4, lecturerBlock: 0, yearGroups: [3],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'CS202', name: 'Object-Oriented Programming', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [4],
-    sessions: [{ type: 'lecture', duration: 1, freq: 3 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'CS203', name: 'Computer Architecture', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [5],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'CS301', name: 'Database Systems', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [6],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'CS302', name: 'Operating Systems', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [7],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'CS303', name: 'Computer Networks', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [8],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'CS401', name: 'Artificial Intelligence', department: 'Computer Science', credits: 4, lecturerBlock: 0, yearGroups: [9],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'CS402', name: 'Machine Learning', department: 'Computer Science', credits: 4, lecturerBlock: 0, yearGroups: [10],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 3, freq: 1 }] },
-  { code: 'CS403', name: 'Software Engineering', department: 'Computer Science', credits: 3, lecturerBlock: 0, yearGroups: [11],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 2 }] },
-  // ── Mathematics (lecturerBlock 1, lecturers idx 5-9) ──────────────
-  { code: 'MATH101', name: 'Calculus I', department: 'Mathematics', credits: 4, lecturerBlock: 1, yearGroups: [0],
-    sessions: [{ type: 'lecture', duration: 2, freq: 3 }, { type: 'tutorial', duration: 1, freq: 2 }] },
-  { code: 'MATH102', name: 'Calculus II', department: 'Mathematics', credits: 4, lecturerBlock: 1, yearGroups: [1],
-    sessions: [{ type: 'lecture', duration: 2, freq: 3 }, { type: 'tutorial', duration: 1, freq: 2 }] },
-  { code: 'MATH201', name: 'Linear Algebra', department: 'Mathematics', credits: 3, lecturerBlock: 1, yearGroups: [3],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'MATH202', name: 'Differential Equations', department: 'Mathematics', credits: 3, lecturerBlock: 1, yearGroups: [4],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'MATH301', name: 'Probability & Statistics', department: 'Mathematics', credits: 3, lecturerBlock: 1, yearGroups: [6],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'MATH302', name: 'Abstract Algebra', department: 'Mathematics', credits: 3, lecturerBlock: 1, yearGroups: [7],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'MATH401', name: 'Real Analysis', department: 'Mathematics', credits: 4, lecturerBlock: 1, yearGroups: [9],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 2 }] },
-  // ── Physics (lecturerBlock 2, lecturers idx 10-14) ─────────────────
-  { code: 'PHY101', name: 'Physics I - Mechanics', department: 'Physics', credits: 4, lecturerBlock: 2, yearGroups: [2],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'PHY102', name: 'Physics II - Thermodynamics', department: 'Physics', credits: 4, lecturerBlock: 2, yearGroups: [0],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'PHY201', name: 'Electromagnetism', department: 'Physics', credits: 4, lecturerBlock: 2, yearGroups: [5],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'PHY202', name: 'Optics & Waves', department: 'Physics', credits: 3, lecturerBlock: 2, yearGroups: [3],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'PHY301', name: 'Quantum Mechanics', department: 'Physics', credits: 4, lecturerBlock: 2, yearGroups: [8],
-    sessions: [{ type: 'lecture', duration: 2, freq: 3 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'PHY302', name: 'Solid State Physics', department: 'Physics', credits: 3, lecturerBlock: 2, yearGroups: [6],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
+  // ── Sem 2 Informatics (Blue) ──────────────────────────────────────
+  {
+    code: 'INF201', name: 'Fundamentals of Algorithms and Data Structures',
+    department: 'Informatics', credits: 6,
+    lecturerIndices: [L['Kobourov']!],
+    yearGroups: [GRP_SEM2],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 2 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF202', name: 'Operating Systems and System Software',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Trinitis']!],
+    yearGroups: [GRP_SEM2],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF203', name: 'Linear Algebra',
+    department: 'Mathematics', credits: 6,
+    lecturerIndices: [L['Anzt']!],
+    yearGroups: [GRP_SEM2],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 2 },
+      { type: 'tutorial', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'INF204', name: 'Foundations of Cyber-Physical Systems',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Amr']!],
+    yearGroups: [GRP_SEM2],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF205', name: 'Introduction to Software Engineering',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Wagner']!],
+    yearGroups: [GRP_SEM2],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
 
-  // ── Chemistry (lecturerBlock 3, lecturers idx 15-19) ──────────────
-  { code: 'CHEM101', name: 'General Chemistry I', department: 'Chemistry', credits: 4, lecturerBlock: 3, yearGroups: [1],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 3, freq: 1 }] },
-  { code: 'CHEM102', name: 'General Chemistry II', department: 'Chemistry', credits: 4, lecturerBlock: 3, yearGroups: [2],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 3, freq: 1 }] },
-  { code: 'CHEM201', name: 'Organic Chemistry I', department: 'Chemistry', credits: 4, lecturerBlock: 3, yearGroups: [4],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }, { type: 'lab', duration: 3, freq: 1 }] },
-  { code: 'CHEM202', name: 'Organic Chemistry II', department: 'Chemistry', credits: 4, lecturerBlock: 3, yearGroups: [5],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 3, freq: 1 }] },
-  { code: 'CHEM301', name: 'Physical Chemistry', department: 'Chemistry', credits: 4, lecturerBlock: 3, yearGroups: [7],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'CHEM401', name: 'Biochemistry', department: 'Chemistry', credits: 3, lecturerBlock: 3, yearGroups: [10],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 2, freq: 1 }] },
+  // ── Sem 4 Informatics (Green) ─────────────────────────────────────
+  {
+    code: 'INF401', name: 'Business Process Management',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Pufahl']!, L['Samira']!],
+    yearGroups: [GRP_SEM4],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 4 },
+    ],
+  },
+  {
+    code: 'INF402', name: 'Introduction to Signal Processing',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Amr']!],
+    yearGroups: [GRP_SEM4],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF403', name: 'Discrete Probability Theory',
+    department: 'Mathematics', credits: 5,
+    lecturerIndices: [L['Fraser']!],
+    yearGroups: [GRP_SEM4],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF404', name: 'Enterprise Architecture Management',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Pufahl']!, L['Kerstin']!],
+    yearGroups: [GRP_SEM4],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 4 },
+    ],
+  },
 
-  // ── Biology (lecturerBlock 4, lecturers idx 20-24) ─────────────────
-  { code: 'BIO101', name: 'Introduction to Biology', department: 'Biology', credits: 4, lecturerBlock: 4, yearGroups: [0],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'BIO102', name: 'Cell Biology', department: 'Biology', credits: 4, lecturerBlock: 4, yearGroups: [1],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'BIO201', name: 'Genetics', department: 'Biology', credits: 3, lecturerBlock: 4, yearGroups: [3],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'BIO202', name: 'Microbiology', department: 'Biology', credits: 3, lecturerBlock: 4, yearGroups: [5],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 3, freq: 1 }] },
-  { code: 'BIO301', name: 'Ecology', department: 'Biology', credits: 3, lecturerBlock: 4, yearGroups: [8],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'BIO401', name: 'Molecular Biology', department: 'Biology', credits: 4, lecturerBlock: 4, yearGroups: [11],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'lab', duration: 3, freq: 1 }] },
+  // ── Sem 6 Informatics (Orange) ─────────────────────────────────────
+  {
+    code: 'INF601', name: 'Introduction to Data Visualization',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Kobourov']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'INF602', name: 'Foundation and Application of Generative AI',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Chen']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 3 },
+    ],
+  },
+  {
+    code: 'INF603', name: 'Algorithms for Graph Drawing',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Kobourov']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'INF604', name: 'Algorithm Design for Competitive Challenges',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Kobourov']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF605', name: 'Network Visualization for Competitive Challenges',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Kobourov']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF606', name: 'Knowledge Graphs',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Acosta']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF607', name: 'Games on Graphs',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Luttenberger']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF608', name: 'Mathematical Foundation of Cryptography',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Luttenberger']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF609', name: 'Advanced Software Testing and Analysis',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Wagner']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF610', name: 'Computational Geometry',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Kobourov']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'INF611', name: 'Introduction to C++',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Anzt']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'INF612', name: 'Numerical Linear Algebra for Computational Science and IE',
+    department: 'Mathematics', credits: 5,
+    lecturerIndices: [L['Anzt']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'INF613', name: 'Parallel Computing and Exercise',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Anzt']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 2, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF614', name: 'Network Coding',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Günther']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'INF615', name: 'Gamified Information Systems',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Sunyaev']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF616', name: 'Seminar: Advanced Topics High-Performance Computing',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Anzt']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF617', name: 'Seminar: Generative Models on Text',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Fraser']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF618', name: 'AI-augmented BPM',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Pufahl']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF619', name: 'PC: Building an Advanced BPM Research App',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Pufahl']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lab', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF620', name: 'Building a BPM Research App',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Pufahl']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF621', name: 'Hot Topics in BPM Research',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Pufahl']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF622', name: 'Computer Networking and Internet',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Günther']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF623', name: 'Security of Large Language Models',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Chen']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF624', name: 'Software Engineering for Artificial Intelligence',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Wagner']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF625', name: 'SE-Kolloquium: Software Engineering Research',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Wagner']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF626', name: 'Exploratory Software Testing',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Chen']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF627', name: 'AI-Empowered Automated Software Development',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Chen']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF628', name: 'History of Computer Science',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Trinitis']!, L['Luttenberger']!, L['Anzt']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF629', name: 'Exploring AI in Software Engineering',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Wagner']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF630', name: 'Data Engineering Group 1',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Acosta']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF631', name: 'Data Engineering Group 2',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Acosta']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF632', name: 'Duckie Town',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Amr']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lab', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF633', name: 'Next Gen Programming',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Wagner']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF634', name: 'Applied Machine Learning',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Amr']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF635', name: 'Human-centered Artifact Design',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Sunyaev']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF636', name: 'Automate Mobile App Testing',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Chen']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF637', name: 'BPC: Chatbot',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Tasch']!, L['Wagner']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF638', name: 'Projects in Natural Language Processing',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Fraser']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF639', name: 'Block: Tools and Practice in Digital Research and Engineering',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Anzt']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'INF640', name: 'Block: Disentangling Sustainability in IT',
+    department: 'Informatics', credits: 3,
+    lecturerIndices: [L['Pufahl']!],
+    yearGroups: [GRP_SEM6],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
 
-  // ── Engineering (lecturerBlock 5, lecturers idx 25-29) ────────────
-  { code: 'ENG101', name: 'Engineering Drawing', department: 'Engineering', credits: 2, lecturerBlock: 5, yearGroups: [2],
-    sessions: [{ type: 'lecture', duration: 1, freq: 1 }, { type: 'lab', duration: 2, freq: 2 }] },
-  { code: 'ENG102', name: 'Engineering Mathematics', department: 'Engineering', credits: 3, lecturerBlock: 5, yearGroups: [0],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 2 }] },
-  { code: 'ENG201', name: 'Circuit Analysis', department: 'Engineering', credits: 3, lecturerBlock: 5, yearGroups: [4],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'ENG202', name: 'Thermodynamics & Heat Transfer', department: 'Engineering', credits: 3, lecturerBlock: 5, yearGroups: [5],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'ENG301', name: 'Structural Mechanics', department: 'Engineering', credits: 3, lecturerBlock: 5, yearGroups: [6],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }, { type: 'lab', duration: 2, freq: 1 }] },
-  { code: 'ENG401', name: 'Capstone Design Project', department: 'Engineering', credits: 4, lecturerBlock: 5, yearGroups: [9],
-    sessions: [{ type: 'lecture', duration: 1, freq: 1 }, { type: 'lab', duration: 3, freq: 2 }] },
-
-  // ── Economics (lecturerBlock 6, lecturers idx 30-34) ──────────────
-  { code: 'ECON101', name: 'Introduction to Microeconomics', department: 'Economics', credits: 3, lecturerBlock: 6, yearGroups: [1],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'ECON102', name: 'Introduction to Macroeconomics', department: 'Economics', credits: 3, lecturerBlock: 6, yearGroups: [2],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'ECON201', name: 'Intermediate Microeconomics', department: 'Economics', credits: 3, lecturerBlock: 6, yearGroups: [3],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'ECON202', name: 'Econometrics I', department: 'Economics', credits: 3, lecturerBlock: 6, yearGroups: [5],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'ECON301', name: 'Public Economics', department: 'Economics', credits: 3, lecturerBlock: 6, yearGroups: [7],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'ECON401', name: 'International Trade Theory', department: 'Economics', credits: 3, lecturerBlock: 6, yearGroups: [10],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'ECON402', name: 'Development Economics', department: 'Economics', credits: 3, lecturerBlock: 6, yearGroups: [11],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-
-  // ── Business (lecturerBlock 7, lecturers idx 35-39) ───────────────
-  { code: 'BUS101', name: 'Principles of Management', department: 'Business', credits: 3, lecturerBlock: 7, yearGroups: [2],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'BUS102', name: 'Business Communication', department: 'Business', credits: 2, lecturerBlock: 7, yearGroups: [0],
-    sessions: [{ type: 'lecture', duration: 1, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'BUS201', name: 'Financial Accounting', department: 'Business', credits: 3, lecturerBlock: 7, yearGroups: [4],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'BUS202', name: 'Marketing Fundamentals', department: 'Business', credits: 3, lecturerBlock: 7, yearGroups: [3],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'BUS301', name: 'Strategic Management', department: 'Business', credits: 3, lecturerBlock: 7, yearGroups: [8],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'BUS401', name: 'Entrepreneurship & Innovation', department: 'Business', credits: 3, lecturerBlock: 7, yearGroups: [9],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'BUS402', name: 'Corporate Finance', department: 'Business', credits: 3, lecturerBlock: 7, yearGroups: [11],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-
-  // ── Literature (lecturerBlock 8, lecturers idx 40-44) ─────────────
-  { code: 'LIT101', name: 'Introduction to World Literature', department: 'Literature', credits: 3, lecturerBlock: 8, yearGroups: [1],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'LIT102', name: 'Academic Writing', department: 'Literature', credits: 2, lecturerBlock: 8, yearGroups: [2],
-    sessions: [{ type: 'lecture', duration: 1, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'LIT201', name: 'British Literature', department: 'Literature', credits: 3, lecturerBlock: 8, yearGroups: [5],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'LIT202', name: 'Comparative Literature', department: 'Literature', credits: 3, lecturerBlock: 8, yearGroups: [3],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'LIT301', name: 'Contemporary Fiction', department: 'Literature', credits: 3, lecturerBlock: 8, yearGroups: [7],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'LIT401', name: 'Literary Theory & Criticism', department: 'Literature', credits: 4, lecturerBlock: 8, yearGroups: [10],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 2 }] },
-
-  // ── Psychology (lecturerBlock 9, lecturers idx 45-49) ─────────────
-  { code: 'PSY101', name: 'Introduction to Psychology', department: 'Psychology', credits: 3, lecturerBlock: 9, yearGroups: [0],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'PSY102', name: 'Research Methods in Psychology', department: 'Psychology', credits: 3, lecturerBlock: 9, yearGroups: [1],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'PSY201', name: 'Cognitive Psychology', department: 'Psychology', credits: 3, lecturerBlock: 9, yearGroups: [4],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'PSY202', name: 'Developmental Psychology', department: 'Psychology', credits: 3, lecturerBlock: 9, yearGroups: [5],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'PSY301', name: 'Social Psychology', department: 'Psychology', credits: 3, lecturerBlock: 9, yearGroups: [8],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'PSY302', name: 'Abnormal Psychology', department: 'Psychology', credits: 3, lecturerBlock: 9, yearGroups: [6],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
-  { code: 'PSY401', name: 'Neuropsychology', department: 'Psychology', credits: 4, lecturerBlock: 9, yearGroups: [11],
-    sessions: [{ type: 'lecture', duration: 2, freq: 2 }, { type: 'tutorial', duration: 1, freq: 1 }] },
+  // ── Management / MGT (Black) ──────────────────────────────────────
+  {
+    code: 'MGT101', name: 'Production and Logistics',
+    department: 'Management', credits: 5,
+    lecturerIndices: [L['Wuttke']!],
+    yearGroups: [GRP_MGT],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'MGT102', name: 'Investment and Financial Management',
+    department: 'Management', credits: 5,
+    lecturerIndices: [L['Müller']!],
+    yearGroups: [GRP_MGT],
+    sessions: [
+      { type: 'lecture',  duration: 1, freq: 1 },
+      { type: 'tutorial', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'MGT103', name: 'High-Performance Computing',
+    department: 'Informatics', credits: 5,
+    lecturerIndices: [L['Anzt']!],
+    yearGroups: [GRP_MGT],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'MGT104', name: 'Marketing and Innovation Management',
+    department: 'Management', credits: 5,
+    lecturerIndices: [L['Meißner']!],
+    yearGroups: [GRP_MGT],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 2 },
+    ],
+  },
+  {
+    code: 'MGT201', name: 'Electives in Management: Social Media Marketing',
+    department: 'Management', credits: 3,
+    lecturerIndices: [L['Volkmer']!],
+    yearGroups: [GRP_MGT],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'MGT202', name: 'Electives in Management: CEO Leadership Series',
+    department: 'Management', credits: 3,
+    lecturerIndices: [L['Li']!],
+    yearGroups: [GRP_MGT],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'MGT301', name: 'Block: Ethics for Nerds',
+    department: 'Management', credits: 3,
+    lecturerIndices: [L['Trinitis']!],
+    yearGroups: [GRP_MGT],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
+  {
+    code: 'MGT302', name: 'Block: Digital Responsibility for Information Engineering',
+    department: 'Management', credits: 3,
+    lecturerIndices: [L['Stich']!],
+    yearGroups: [GRP_MGT],
+    sessions: [
+      { type: 'lecture', duration: 1, freq: 1 },
+    ],
+  },
 ];
 
 // ── Default scheduling constraints ────────────────────────────────────
@@ -425,14 +741,14 @@ const CONSTRAINTS_DATA = [
     severity: 'soft' as const,
     weight: 30,
     config: '{}',
-    description: 'Minimize idle gaps between a lecturer\'s sessions on the same day',
+    description: "Minimize idle gaps between a lecturer's sessions on the same day",
   },
   {
     constraintType: 'minimize_student_gaps',
     severity: 'soft' as const,
     weight: 20,
     config: '{}',
-    description: 'Minimize idle gaps between a student group\'s sessions on the same day',
+    description: "Minimize idle gaps between a student group's sessions on the same day",
   },
   {
     constraintType: 'distribute_load_evenly',
@@ -550,15 +866,15 @@ async function main() {
   // Wipe existing data
   await wipeTenantData(tenant.id);
 
-  // 1. Create lecturers (50)
+  // 1. Create lecturers (21)
   console.log(`Creating ${LECTURERS.length} lecturers...`);
   const createdLecturers = await db
     .insert(users)
     .values(
-      LECTURERS.map((l, i) => ({
+      LECTURERS.map((l) => ({
         tenantId: tenant.id,
         clerkUserId: '',
-        email: `lecturer${i + 1}@seed.local`,
+        email: `${l.lastName.toLowerCase().replace(/[^a-z0-9]/g, '')}@tum.de`,
         firstName: l.firstName,
         lastName: l.lastName,
         role: 'lecturer' as const,
@@ -567,7 +883,7 @@ async function main() {
     .returning();
   console.log(`  -> ${createdLecturers.length} lecturers created`);
 
-  // 2. Create rooms
+  // 2. Create rooms (13)
   console.log(`Creating ${ROOMS_DATA.length} rooms...`);
   const createdRooms = await db
     .insert(rooms)
@@ -584,7 +900,7 @@ async function main() {
     .returning();
   console.log(`  -> ${createdRooms.length} rooms created`);
 
-  // 3. Create student groups (12)
+  // 3. Create student groups (4) with colors
   console.log(`Creating ${STUDENT_GROUPS_DATA.length} student groups...`);
   const createdGroups = await db
     .insert(studentGroups)
@@ -594,21 +910,20 @@ async function main() {
         name: sg.name,
         year: sg.year,
         size: sg.size,
+        color: sg.color,
       })),
     )
     .returning();
   console.log(`  -> ${createdGroups.length} student groups created`);
 
-  // 4. Create courses + sessions + lecturer assignments + student group assignments (70 courses)
+  // 4. Create courses + sessions + lecturer assignments + student group assignments
   console.log(`Creating ${COURSES_DATA.length} courses with sessions...`);
   let totalSessions = 0;
   let totalCourseLecturers = 0;
   let totalSessionLecturers = 0;
   let totalCourseStudentGroups = 0;
 
-  for (let courseIdx = 0; courseIdx < COURSES_DATA.length; courseIdx++) {
-    const courseData = COURSES_DATA[courseIdx]!;
-
+  for (const courseData of COURSES_DATA) {
     // Insert course
     const [course] = await db
       .insert(courses)
@@ -637,15 +952,10 @@ async function main() {
       .returning();
     totalSessions += createdSessions.length;
 
-    // Determine which lecturers teach this course.
-    // The "primary" lecturer is the first in the dept block; secondary is offset by courseIdx within block.
-    const blockStart = courseData.lecturerBlock * 5;
-    const primaryIdx = blockStart + (courseIdx % 5);
-    const secondaryIdx = blockStart + ((courseIdx + 1) % 5);
-    const primaryLecturer = createdLecturers[primaryIdx];
-    const secondaryLecturer = createdLecturers[secondaryIdx];
-
     // Course-level lecturer assignment (primary only as course coordinator)
+    const primaryIdx = courseData.lecturerIndices[0];
+    const primaryLecturer = primaryIdx !== undefined ? createdLecturers[primaryIdx] : undefined;
+
     if (primaryLecturer) {
       await db.insert(courseLecturers).values({
         courseId: course.id,
@@ -654,20 +964,15 @@ async function main() {
       totalCourseLecturers += 1;
     }
 
-    // Session-level lecturer assignments
+    // Session-level lecturer assignments: all named lecturers on all sessions
     for (const session of createdSessions) {
       const sessionLecturerValues: Array<{ sessionId: string; userId: string }> = [];
 
-      if (primaryLecturer) {
-        sessionLecturerValues.push({ sessionId: session.id, userId: primaryLecturer.id });
-      }
-      // Tutorials and labs get a second lecturer (the secondary in the block)
-      if (
-        (session.sessionType === 'tutorial' || session.sessionType === 'lab') &&
-        secondaryLecturer &&
-        secondaryLecturer.id !== primaryLecturer?.id
-      ) {
-        sessionLecturerValues.push({ sessionId: session.id, userId: secondaryLecturer.id });
+      for (const lecIdx of courseData.lecturerIndices) {
+        const lecturer = createdLecturers[lecIdx];
+        if (lecturer) {
+          sessionLecturerValues.push({ sessionId: session.id, userId: lecturer.id });
+        }
       }
 
       if (sessionLecturerValues.length > 0) {
@@ -696,11 +1001,21 @@ async function main() {
   console.log(`  -> ${totalCourseLecturers} course-lecturer links, ${totalSessionLecturers} session-lecturer links`);
   console.log(`  -> ${totalCourseStudentGroups} course-student-group links`);
 
-  // 5. Generate time slots (Mon-Fri, 08:00-18:00, 1-hour slots, ~17 weeks)
-  console.log('Generating time slots (2026-04-13 → 2026-08-07, Mon-Fri, 08:00-18:00, 1h each)...');
+  // 5. Generate time slots (Mon-Fri, 6 × 1.5h slots, ~17 weeks)
+  console.log('Generating time slots (2026-04-13 → 2026-08-07, Mon-Fri, 6 × 1.5h slots)...');
   const startDate = '2026-04-13';
   const endDate = '2026-08-07';
   const activeDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+  // 6 fixed 1.5-hour slots per day (30-min breaks between)
+  const SLOTS = [
+    { startTime: '08:15', endTime: '09:45' },
+    { startTime: '10:15', endTime: '11:45' },
+    { startTime: '12:15', endTime: '13:45' },
+    { startTime: '14:15', endTime: '15:45' },
+    { startTime: '16:15', endTime: '17:45' },
+    { startTime: '18:15', endTime: '19:45' },
+  ];
 
   type DayOfWeekValue = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 
@@ -720,15 +1035,13 @@ async function main() {
     const dow = getDayOfWeek(dateStr);
 
     if (activeDays.includes(dow)) {
-      for (let hour = 8; hour < 18; hour++) {
-        const startTime = `${String(hour).padStart(2, '0')}:00`;
-        const endTime = `${String(hour + 1).padStart(2, '0')}:00`;
+      for (const slot of SLOTS) {
         slotValues.push({
           tenantId: tenant.id,
           date: dateStr,
           dayOfWeek: dow as DayOfWeekValue,
-          startTime,
-          endTime,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
         });
       }
     }
@@ -743,28 +1056,27 @@ async function main() {
   console.log(`  -> ${slotValues.length} time slots created`);
 
   // 6. Lecturer unavailability exceptions
-  // Day exceptions: 15 lecturers each get one recurring day off.
-  // Deterministically cycle through weekdays using lecturer index.
+  // Day exceptions: every 4th lecturer (indices 0, 4, 8, 12, 16, 20) gets one recurring day off.
   console.log('Adding lecturer unavailability exceptions...');
   const unavailDays: DayOfWeekValue[] = ['friday', 'monday', 'wednesday', 'thursday', 'tuesday'];
-  const dayExceptionTargets = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42];
+  const dayExceptionTargets = [0, 4, 8, 12, 16, 20];
 
-  const dayExceptionsData = dayExceptionTargets.map((lecturerIdx, i) => {
-    const lecturer = createdLecturers[lecturerIdx];
-    return lecturer
-      ? { userId: lecturer.id, dayOfWeek: pick(unavailDays, i) }
-      : null;
-  }).filter((v): v is { userId: string; dayOfWeek: DayOfWeekValue } => v !== null);
+  const dayExceptionsData = dayExceptionTargets
+    .map((lecturerIdx, i) => {
+      const lecturer = createdLecturers[lecturerIdx];
+      return lecturer
+        ? { userId: lecturer.id, dayOfWeek: pick(unavailDays, i) }
+        : null;
+    })
+    .filter((v): v is { userId: string; dayOfWeek: DayOfWeekValue } => v !== null);
 
   if (dayExceptionsData.length > 0) {
     await db.insert(lecturerDayExceptions).values(dayExceptionsData);
   }
 
-  // Date exceptions: 10 lecturers get 2-5 date exceptions each within the semester period.
-  // Use fixed offsets from startDate to keep it deterministic.
-  // Pattern: lecturer at index picks dates based on their position.
+  // Date exceptions: selected lecturers get 2-5 date exceptions within the semester.
   type DateException = { userId: string; date: string; reason: string };
-  const dateExceptionTargets = [1, 5, 10, 16, 20, 25, 31, 37, 43, 47];
+  const dateExceptionTargets = [1, 5, 9, 13, 17];
 
   const conferenceReasons = [
     'Conference - International Symposium',
@@ -772,27 +1084,14 @@ async function main() {
     'Academic Conference - Keynote Speaker',
     'Professional Development Day',
     'External Examination Duty',
-    'Medical Appointment',
-    'Workshop - Curriculum Development',
-    'Faculty Senate Retreat',
-    'Grant Review Panel',
-    'Visiting Scholar Duties',
   ];
 
-  // Pre-compute dates within the semester spread across ~17 weeks (119 calendar days).
-  // Offsets (in days from start) chosen to be spread out and fall on weekdays.
-  // 17 weeks × 5 weekdays = 85 weekdays total; pick 5 offsets per lecturer spread through the calendar.
   const dateOffsetSets: number[][] = [
-    [7, 21, 56, 84, 105],   // lecturer 1
-    [14, 35, 63, 91, 112],  // lecturer 5
-    [3, 28, 49, 77, 98],    // lecturer 10
-    [10, 42, 70, 88, 115],  // lecturer 16
-    [5, 19, 58, 80, 107],   // lecturer 20
-    [17, 33, 52, 86, 109],  // lecturer 25
-    [8, 26, 61, 93, 118],   // lecturer 31
-    [12, 38, 67, 95, 113],  // lecturer 37
-    [4, 23, 55, 82, 103],   // lecturer 43
-    [15, 30, 44, 71, 99],   // lecturer 47
+    [7, 21, 56, 84, 105],
+    [14, 35, 63, 91, 112],
+    [3, 28, 49, 77, 98],
+    [10, 42, 70, 88, 115],
+    [5, 19, 58, 80, 107],
   ];
 
   const seedStart = new Date(startDate + 'T12:00:00Z');
@@ -808,7 +1107,6 @@ async function main() {
       d.setUTCDate(d.getUTCDate() + offset);
       const dateStr = d.toISOString().split('T')[0]!;
       const dow = getDayOfWeek(dateStr);
-      // Only add if it falls on a weekday (skip weekends)
       if (activeDays.includes(dow)) {
         dateExceptionsData.push({ userId: lecturer.id, date: dateStr, reason });
       }
