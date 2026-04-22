@@ -6,7 +6,7 @@ import { EngineSolveResultSchema } from '@scheduler/types';
 
 import { env } from '@/env';
 import { db } from '@/lib/db';
-import { generatedSchedules, scheduleEntries } from '@/lib/db/schema';
+import { generatedSchedules, scheduleEntries, scheduleVersions } from '@/lib/db/schema';
 
 export async function POST(req: Request) {
   const signature =
@@ -83,6 +83,43 @@ export async function POST(req: Request) {
     console.info(
       `[Engine Webhook] Inserted ${rows.length} schedule entries for ${result.scheduleId}`,
     );
+
+    // Auto-save an "Original" version so users can always roll back to the
+    // solver output even after manual edits. Matches the snapshot shape used
+    // by saveVersion / restoreVersion in the schedules tRPC router.
+    try {
+      const [schedule] = await db
+        .select({ tenantId: generatedSchedules.tenantId })
+        .from(generatedSchedules)
+        .where(eq(generatedSchedules.id, result.scheduleId));
+
+      if (schedule) {
+        const snapshot = rows.map((r) => ({
+          sessionId: r.sessionId,
+          roomId: r.roomId,
+          timeSlotId: r.timeSlotId,
+        }));
+
+        await db.insert(scheduleVersions).values({
+          scheduleId: result.scheduleId,
+          tenantId: schedule.tenantId,
+          name: 'Original',
+          entriesSnapshot: JSON.stringify(snapshot),
+          conflictCount: 0,
+          createdBy: null,
+        });
+
+        console.info(
+          `[Engine Webhook] Saved "Original" version for schedule ${result.scheduleId}`,
+        );
+      }
+    } catch (err) {
+      // Non-fatal: if the version row fails, the schedule is still usable.
+      console.error(
+        `[Engine Webhook] Failed to save "Original" version for ${result.scheduleId}:`,
+        err,
+      );
+    }
   }
 
   return NextResponse.json({ received: true });
