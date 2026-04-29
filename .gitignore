@@ -87,6 +87,15 @@ drizzle/migrations/meta/_journal.json.bak
 # OS
 Desktop.ini
 
-# Claude Code (local agent state, agents, settings — not shared across machines)
+# AI assistants — local agent state, prompts, settings (not shared across machines)
 .claude/
 apps/web/.claude/
+.cursor/
+.cursorrules
+.aider*
+.continue/
+.cline/
+.windsurfrules
+.github/copilot-instructions.md
+*AGENT_PROMPT.md
+*AGENT_PROMPT*.md
