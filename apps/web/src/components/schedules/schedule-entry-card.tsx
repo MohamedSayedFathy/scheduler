@@ -5,25 +5,10 @@ import { cn } from '@/lib/utils';
 
 type SessionType = 'lecture' | 'tutorial' | 'lab';
 
-const sessionTypeStyles: Record<
-  SessionType,
-  { bg: string; border: string; text: string }
-> = {
-  lecture: {
-    bg: 'bg-blue-100 dark:bg-blue-900/30',
-    border: 'border-blue-300 dark:border-blue-700',
-    text: 'text-blue-900 dark:text-blue-100',
-  },
-  tutorial: {
-    bg: 'bg-green-100 dark:bg-green-900/30',
-    border: 'border-green-300 dark:border-green-700',
-    text: 'text-green-900 dark:text-green-100',
-  },
-  lab: {
-    bg: 'bg-purple-100 dark:bg-purple-900/30',
-    border: 'border-purple-300 dark:border-purple-700',
-    text: 'text-purple-900 dark:text-purple-100',
-  },
+const NEUTRAL_STYLE = {
+  bg: 'bg-slate-100 dark:bg-slate-800',
+  border: 'border-slate-300 dark:border-slate-600',
+  text: 'text-slate-900 dark:text-slate-100',
 };
 
 const sessionTypeLabels: Record<SessionType, string> = {
@@ -66,17 +51,13 @@ interface ScheduleEntryCardProps {
 }
 
 export function ScheduleEntryCard({ entry, onClick, conflicted, conflictMessages }: ScheduleEntryCardProps) {
-  const style = sessionTypeStyles[entry.sessionType];
   const { groupColor } = entry;
 
-  // When a group color is present, override the palette with an inline style.
-  // backgroundColor = hex + '33' gives 20% alpha fill; borderColor = full hex.
-  // The conflicted state takes priority for the border (border-destructive class).
   const groupColorStyle =
     groupColor && !conflicted
       ? { backgroundColor: groupColor + '33', borderColor: groupColor }
       : groupColor && conflicted
-        ? { backgroundColor: groupColor + '33' } // keep fill, but let border-destructive win
+        ? { backgroundColor: groupColor + '33' }
         : undefined;
 
   const button = (
@@ -86,9 +67,8 @@ export function ScheduleEntryCard({ entry, onClick, conflicted, conflictMessages
       style={groupColorStyle}
       className={cn(
         'w-full rounded-md border p-2 text-left transition-shadow hover:shadow-md cursor-pointer',
-        // When groupColor is set the bg is supplied via inline style; only keep text + border classes
-        groupColor ? style.text : cn(style.bg, style.text),
-        conflicted ? 'border-2 border-destructive' : groupColor ? '' : style.border,
+        groupColor ? 'text-slate-900 dark:text-slate-100' : cn(NEUTRAL_STYLE.bg, NEUTRAL_STYLE.text),
+        conflicted ? 'border-2 border-destructive' : groupColor ? '' : NEUTRAL_STYLE.border,
       )}
     >
       <p className="text-xs font-bold truncate">{entry.courseCode}</p>

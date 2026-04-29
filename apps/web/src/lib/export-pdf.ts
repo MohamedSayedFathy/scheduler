@@ -6,17 +6,55 @@ import { buildWeekList, isoWeekKey } from '@/components/schedules/week-navigator
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-const SESSION_COLORS: Record<string, [number, number, number]> = {
-  lecture: [219, 234, 254],
-  tutorial: [220, 252, 231],
-  lab: [237, 233, 254],
-};
+type RGB = [number, number, number];
+
+const NEUTRAL_FILL: RGB = [241, 245, 249];   // slate-100
+const NEUTRAL_BORDER: RGB = [203, 213, 225]; // slate-300
+const TEXT_DARK: RGB = [15, 23, 42];          // slate-900
+
+function parseHex(hex: string | null | undefined): RGB | null {
+  if (!hex) return null;
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1]!, 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+function mixWithWhite([r, g, b]: RGB, alpha: number): RGB {
+  const blend = (c: number) => Math.round(255 * (1 - alpha) + c * alpha);
+  return [blend(r), blend(g), blend(b)];
+}
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-type PdfCell = string | { content: string; styles: { fillColor: [number, number, number] } };
+interface CellStyles {
+  fillColor: RGB;
+  textColor: RGB;
+  lineColor: RGB;
+  lineWidth: number;
+}
+
+type PdfCell = string | { content: string; styles: CellStyles };
+
+function entryColors(entry: ScheduleEntryData): CellStyles {
+  const groupRgb = parseHex(entry.groupColor ?? null);
+  if (groupRgb) {
+    return {
+      fillColor: mixWithWhite(groupRgb, 0.2),
+      textColor: TEXT_DARK,
+      lineColor: groupRgb,
+      lineWidth: 0.4,
+    };
+  }
+  return {
+    fillColor: NEUTRAL_FILL,
+    textColor: TEXT_DARK,
+    lineColor: NEUTRAL_BORDER,
+    lineWidth: 0.3,
+  };
+}
 
 function buildWeekPage(
   doc: jsPDF,
@@ -76,7 +114,12 @@ function buildWeekPage(
     body.push([
       {
         content: 'No entries match the current filters.',
-        styles: { fillColor: [255, 255, 255] },
+        styles: {
+          fillColor: [255, 255, 255],
+          textColor: [17, 24, 39],
+          lineColor: [200, 200, 200],
+          lineWidth: 0.3,
+        },
       },
     ]);
   } else {
@@ -92,14 +135,13 @@ function buildWeekPage(
             .map((e) => {
               const lines = [`${e.courseCode} (${capitalize(e.sessionType)})`];
               lines.push(`Room: ${e.roomName}`);
-              if (e.lecturerName) lines.push(e.lecturerName);
+              const lec = e.assignedLecturerName ?? e.lecturerName;
+              if (lec) lines.push(lec);
               return lines.join('\n');
             })
             .join('\n\n');
 
-          const fillColor: [number, number, number] =
-            SESSION_COLORS[cellEntries[0]!.sessionType] ?? [255, 255, 255];
-          row.push({ content, styles: { fillColor } });
+          row.push({ content, styles: entryColors(cellEntries[0]!) });
         }
       }
 
