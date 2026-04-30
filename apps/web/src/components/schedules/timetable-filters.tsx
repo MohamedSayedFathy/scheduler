@@ -1,19 +1,123 @@
 'use client';
 
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, X } from 'lucide-react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface FilterOption {
   id: string;
   label: string;
+}
+
+interface MultiSelectProps {
+  options: FilterOption[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+  width?: string;
+}
+
+function MultiSelectFilter({
+  options,
+  selected,
+  onChange,
+  placeholder,
+  width = 'w-[200px]',
+}: MultiSelectProps) {
+  const selectedSet = new Set(selected);
+  const count = selected.length;
+
+  function toggle(id: string) {
+    if (selectedSet.has(id)) {
+      onChange(selected.filter((s) => s !== id));
+    } else {
+      onChange([...selected, id]);
+    }
+  }
+
+  function clear(e: React.MouseEvent) {
+    e.stopPropagation();
+    onChange([]);
+  }
+
+  let label: string;
+  if (count === 0) {
+    label = placeholder;
+  } else if (count === 1) {
+    const opt = options.find((o) => o.id === selected[0]);
+    label = opt?.label ?? '1 selected';
+  } else {
+    label = `${count} selected`;
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          className={cn(width, 'justify-between font-normal')}
+        >
+          <span className="truncate">
+            {label}
+          </span>
+          <span className="ml-2 flex items-center gap-1 shrink-0">
+            {count > 0 && (
+              <Badge
+                variant="secondary"
+                className="h-5 cursor-pointer px-1.5 text-[10px] hover:bg-destructive hover:text-destructive-foreground"
+                onClick={clear}
+                aria-label={`Clear ${placeholder}`}
+              >
+                {count}
+                <X className="ml-0.5 h-3 w-3" />
+              </Badge>
+            )}
+            <ChevronsUpDown className="h-4 w-4 opacity-50" />
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[260px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
+          <CommandList>
+            <CommandEmpty>No matches.</CommandEmpty>
+            <CommandGroup>
+              {options.map((opt) => {
+                const isSelected = selectedSet.has(opt.id);
+                return (
+                  <CommandItem
+                    key={opt.id}
+                    onSelect={() => toggle(opt.id)}
+                    className="cursor-pointer"
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 h-4 w-4',
+                        isSelected ? 'opacity-100' : 'opacity-0',
+                      )}
+                    />
+                    <span className="truncate">{opt.label}</span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 interface TimetableFiltersProps {
@@ -21,14 +125,14 @@ interface TimetableFiltersProps {
   studentGroups: FilterOption[];
   rooms: FilterOption[];
   courses: FilterOption[];
-  selectedLecturer: string | null;
-  selectedStudentGroup: string | null;
-  selectedRoom: string | null;
-  selectedCourse: string | null;
-  onLecturerChange: (value: string | null) => void;
-  onStudentGroupChange: (value: string | null) => void;
-  onRoomChange: (value: string | null) => void;
-  onCourseChange: (value: string | null) => void;
+  selectedLecturers: string[];
+  selectedStudentGroups: string[];
+  selectedRooms: string[];
+  selectedCourses: string[];
+  onLecturersChange: (value: string[]) => void;
+  onStudentGroupsChange: (value: string[]) => void;
+  onRoomsChange: (value: string[]) => void;
+  onCoursesChange: (value: string[]) => void;
   showConflictsOnly: boolean;
   onShowConflictsOnlyChange: (value: boolean) => void;
 }
@@ -38,96 +142,58 @@ export function TimetableFilters({
   studentGroups,
   rooms,
   courses,
-  selectedLecturer,
-  selectedStudentGroup,
-  selectedRoom,
-  selectedCourse,
-  onLecturerChange,
-  onStudentGroupChange,
-  onRoomChange,
-  onCourseChange,
+  selectedLecturers,
+  selectedStudentGroups,
+  selectedRooms,
+  selectedCourses,
+  onLecturersChange,
+  onStudentGroupsChange,
+  onRoomsChange,
+  onCoursesChange,
   showConflictsOnly,
   onShowConflictsOnlyChange,
 }: TimetableFiltersProps) {
-  const hasFilters = selectedLecturer || selectedStudentGroup || selectedRoom || selectedCourse || showConflictsOnly;
+  const hasFilters =
+    selectedLecturers.length > 0 ||
+    selectedStudentGroups.length > 0 ||
+    selectedRooms.length > 0 ||
+    selectedCourses.length > 0 ||
+    showConflictsOnly;
 
   function clearAll() {
-    onLecturerChange(null);
-    onStudentGroupChange(null);
-    onRoomChange(null);
-    onCourseChange(null);
+    onLecturersChange([]);
+    onStudentGroupsChange([]);
+    onRoomsChange([]);
+    onCoursesChange([]);
     onShowConflictsOnlyChange(false);
   }
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <Select
-        value={selectedLecturer ?? '__all__'}
-        onValueChange={(v) => onLecturerChange(v === '__all__' ? null : v)}
-      >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue placeholder="All Lecturers" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__all__">All Lecturers</SelectItem>
-          {lecturers.map((l) => (
-            <SelectItem key={l.id} value={l.id}>
-              {l.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={selectedStudentGroup ?? '__all__'}
-        onValueChange={(v) => onStudentGroupChange(v === '__all__' ? null : v)}
-      >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue placeholder="All Groups" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__all__">All Groups</SelectItem>
-          {studentGroups.map((g) => (
-            <SelectItem key={g.id} value={g.id}>
-              {g.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={selectedRoom ?? '__all__'}
-        onValueChange={(v) => onRoomChange(v === '__all__' ? null : v)}
-      >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue placeholder="All Rooms" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__all__">All Rooms</SelectItem>
-          {rooms.map((r) => (
-            <SelectItem key={r.id} value={r.id}>
-              {r.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={selectedCourse ?? '__all__'}
-        onValueChange={(v) => onCourseChange(v === '__all__' ? null : v)}
-      >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue placeholder="All Courses" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__all__">All Courses</SelectItem>
-          {courses.map((c) => (
-            <SelectItem key={c.id} value={c.id}>
-              {c.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <MultiSelectFilter
+        options={lecturers}
+        selected={selectedLecturers}
+        onChange={onLecturersChange}
+        placeholder="All Lecturers"
+      />
+      <MultiSelectFilter
+        options={studentGroups}
+        selected={selectedStudentGroups}
+        onChange={onStudentGroupsChange}
+        placeholder="All Groups"
+      />
+      <MultiSelectFilter
+        options={rooms}
+        selected={selectedRooms}
+        onChange={onRoomsChange}
+        placeholder="All Rooms"
+      />
+      <MultiSelectFilter
+        options={courses}
+        selected={selectedCourses}
+        onChange={onCoursesChange}
+        placeholder="All Courses"
+      />
 
       <Button
         variant={showConflictsOnly ? 'destructive' : 'outline'}

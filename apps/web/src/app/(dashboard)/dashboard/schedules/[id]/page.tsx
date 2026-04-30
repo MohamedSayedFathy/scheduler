@@ -530,11 +530,11 @@ export default function ScheduleDetailPage() {
     },
   });
 
-  // Filters
-  const [selectedLecturer, setSelectedLecturer] = useState<string | null>(null);
-  const [selectedStudentGroup, setSelectedStudentGroup] = useState<string | null>(null);
-  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
-  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  // Filters (multi-select — empty array = no filter for that category)
+  const [selectedLecturers, setSelectedLecturers] = useState<string[]>([]);
+  const [selectedStudentGroups, setSelectedStudentGroups] = useState<string[]>([]);
+  const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [showConflictsOnly, setShowConflictsOnly] = useState(false);
 
   // Week navigation
@@ -850,17 +850,30 @@ export default function ScheduleDetailPage() {
 
   const filterFn = useCallback(
     (entry: ScheduleEntryData): boolean => {
-      if (selectedRoom && entry.roomId !== selectedRoom) return false;
-      if (selectedLecturer && !entry.lecturerIds?.includes(selectedLecturer)) return false;
-      if (selectedStudentGroup && !entry.studentGroupIds?.includes(selectedStudentGroup)) return false;
-      if (selectedCourse && entry.courseId !== selectedCourse) return false;
+      if (selectedRooms.length > 0 && !selectedRooms.includes(entry.roomId)) return false;
+      if (
+        selectedLecturers.length > 0 &&
+        !selectedLecturers.some((id) => entry.lecturerIds?.includes(id))
+      )
+        return false;
+      if (
+        selectedStudentGroups.length > 0 &&
+        !selectedStudentGroups.some((id) => entry.studentGroupIds?.includes(id))
+      )
+        return false;
+      if (selectedCourses.length > 0 && !selectedCourses.includes(entry.courseId)) return false;
       if (showConflictsOnly && !conflictedEntryIds.has(entry.entryId)) return false;
       return true;
     },
-    [selectedRoom, selectedLecturer, selectedStudentGroup, selectedCourse, showConflictsOnly, conflictedEntryIds],
+    [selectedRooms, selectedLecturers, selectedStudentGroups, selectedCourses, showConflictsOnly, conflictedEntryIds],
   );
 
-  const hasActiveFilters = selectedLecturer || selectedStudentGroup || selectedRoom || selectedCourse || showConflictsOnly;
+  const hasActiveFilters =
+    selectedLecturers.length > 0 ||
+    selectedStudentGroups.length > 0 ||
+    selectedRooms.length > 0 ||
+    selectedCourses.length > 0 ||
+    showConflictsOnly;
 
   const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   function dowOf(dateStr: string): string {
@@ -1131,29 +1144,24 @@ export default function ScheduleDetailPage() {
     const filtered = hasActiveFilters ? entryData.filter(filterFn!) : entryData;
 
     const filterLabels: string[] = [];
-    if (selectedLecturer) {
-      const lec = lecturerOptions.find((l) => l.id === selectedLecturer);
-      if (lec) filterLabels.push(`Lecturer: ${lec.label}`);
-    }
-    if (selectedStudentGroup) {
-      const sg = studentGroupOptions.find((g) => g.id === selectedStudentGroup);
-      if (sg) filterLabels.push(`Student Group: ${sg.label}`);
-    }
-    if (selectedRoom) {
-      const rm = roomOptions.find((r) => r.id === selectedRoom);
-      if (rm) filterLabels.push(`Room: ${rm.label}`);
-    }
-    if (selectedCourse) {
-      const co = courseOptions.find((c) => c.id === selectedCourse);
-      if (co) filterLabels.push(`Course: ${co.label}`);
-    }
+    const labelsFor = (ids: string[], opts: { id: string; label: string }[], heading: string) => {
+      if (ids.length === 0) return;
+      const labels = ids
+        .map((id) => opts.find((o) => o.id === id)?.label)
+        .filter((l): l is string => !!l);
+      if (labels.length > 0) filterLabels.push(`${heading}: ${labels.join(', ')}`);
+    };
+    labelsFor(selectedLecturers, lecturerOptions, 'Lecturers');
+    labelsFor(selectedStudentGroups, studentGroupOptions, 'Student Groups');
+    labelsFor(selectedRooms, roomOptions, 'Rooms');
+    labelsFor(selectedCourses, courseOptions, 'Courses');
 
     exportSchedulePdf({
       entries: filtered,
       scheduleName: schedule?.name ?? 'Schedule',
       filterLabels,
     });
-  }, [entryData, hasActiveFilters, filterFn, selectedLecturer, selectedStudentGroup, selectedRoom, selectedCourse, lecturerOptions, studentGroupOptions, roomOptions, courseOptions, schedule?.name]);
+  }, [entryData, hasActiveFilters, filterFn, selectedLecturers, selectedStudentGroups, selectedRooms, selectedCourses, lecturerOptions, studentGroupOptions, roomOptions, courseOptions, schedule?.name]);
 
   if (scheduleLoading) {
     return (
@@ -1360,14 +1368,14 @@ export default function ScheduleDetailPage() {
         studentGroups={studentGroupOptions}
         rooms={roomOptions}
         courses={courseOptions}
-        selectedLecturer={selectedLecturer}
-        selectedStudentGroup={selectedStudentGroup}
-        selectedRoom={selectedRoom}
-        selectedCourse={selectedCourse}
-        onLecturerChange={setSelectedLecturer}
-        onStudentGroupChange={setSelectedStudentGroup}
-        onRoomChange={setSelectedRoom}
-        onCourseChange={setSelectedCourse}
+        selectedLecturers={selectedLecturers}
+        selectedStudentGroups={selectedStudentGroups}
+        selectedRooms={selectedRooms}
+        selectedCourses={selectedCourses}
+        onLecturersChange={setSelectedLecturers}
+        onStudentGroupsChange={setSelectedStudentGroups}
+        onRoomsChange={setSelectedRooms}
+        onCoursesChange={setSelectedCourses}
         showConflictsOnly={showConflictsOnly}
         onShowConflictsOnlyChange={setShowConflictsOnly}
       />
