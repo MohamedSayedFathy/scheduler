@@ -97,12 +97,25 @@ function buildWeekPage(
   let startY = 29;
   if (filterLabels.length > 0) {
     doc.setFont('helvetica', 'italic');
-    doc.text(`Filtered by: ${filterLabels.join(', ')}`, 14, 31);
-    startY = 34;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 14;
+    const maxWidth = pageWidth - marginX * 2;
+    const wrapped = doc.splitTextToSize(
+      `Filtered by: ${filterLabels.join(', ')}`,
+      maxWidth,
+    ) as string[];
+    const lineHeight = 3.5;
+    let y = 31;
+    for (const line of wrapped) {
+      doc.text(line, marginX, y);
+      y += lineHeight;
+    }
+    startY = y;
   }
 
   doc.setDrawColor(200);
-  doc.line(14, startY, 283, startY);
+  const pageWidthForRule = doc.internal.pageSize.getWidth();
+  doc.line(14, startY, pageWidthForRule - 14, startY);
   startY += 3;
 
   // Build table
